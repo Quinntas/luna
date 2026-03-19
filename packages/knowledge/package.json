@@ -1,0 +1,25 @@
+{
+	"name": "@luna/knowledge",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"ingest": "bun run scripts/ingest.ts",
+		"query": "bun run scripts/query.ts",
+		"stats": "bun run scripts/stats.ts",
+		"resolve": "bun run scripts/resolve-conflicts.ts",
+		"init": "bun run scripts/init-schema.ts"
+	},
+	"dependencies": {
+		"@luna/ai": "workspace:*",
+		"neo4j-driver": "^5.28.0",
+		"ai": "^4.3.0",
+		"zod": "^3.24.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	}
+}

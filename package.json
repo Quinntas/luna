@@ -1,0 +1,26 @@
+{
+	"name": "luna",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"scripts": {
+		"dev": "bun run src/index.ts --watch",
+		"check": "biome check --write .",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"typecheck": "bunx tsc --noEmit --project packages/knowledge/tsconfig.json",
+		"knowledge:ingest": "bun run packages/knowledge/scripts/ingest.ts",
+		"knowledge:query": "bun run packages/knowledge/scripts/query.ts",
+		"knowledge:stats": "bun run packages/knowledge/scripts/stats.ts",
+		"knowledge:resolve": "bun run packages/knowledge/scripts/resolve-conflicts.ts",
+		"knowledge:setup": "docker compose up -d && bun run packages/knowledge/scripts/init-schema.ts"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.8",
+		"@types/bun": "latest",
+		"typescript": "^5"
+	}
+}
