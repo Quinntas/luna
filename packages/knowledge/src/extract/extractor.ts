@@ -1,16 +1,14 @@
-import { getModel } from "@luna/ai";
 import { generateObject, type LanguageModel } from "ai";
 import { type ExtractionOutputSchema, extractionOutputSchema } from "./schemas.ts";
 
 export async function extractFromText(
 	text: string,
-	model?: LanguageModel,
+	model: LanguageModel,
 ): Promise<ExtractionOutputSchema> {
-	const m = model ?? getModel();
-
 	const { object } = await generateObject({
-		model: m,
+		model,
 		schema: extractionOutputSchema,
+		maxRetries: 3,
 		prompt: `You are a knowledge extraction system. Extract ALL entities and relationships from the text below.
 
 Rules:

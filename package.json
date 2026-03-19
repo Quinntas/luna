@@ -16,11 +16,18 @@
 		"knowledge:query": "bun run packages/knowledge/scripts/query.ts",
 		"knowledge:stats": "bun run packages/knowledge/scripts/stats.ts",
 		"knowledge:resolve": "bun run packages/knowledge/scripts/resolve-conflicts.ts",
-		"knowledge:setup": "docker compose up -d && bun run packages/knowledge/scripts/init-schema.ts"
+		"knowledge:reset": "bun run packages/knowledge/scripts/reset.ts",
+		"knowledge:export": "bun run packages/knowledge/scripts/export.ts",
+		"knowledge:import": "bun run packages/knowledge/scripts/import.ts",
+		"knowledge:setup": "docker compose up -d && bun run packages/knowledge/scripts/init-schema.ts",
+		"knowledge:test": "bun test packages/knowledge/"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.8",
 		"@types/bun": "latest",
 		"typescript": "^5"
+	},
+	"dependencies": {
+		"franc-min": "^6.2.0"
 	}
 }

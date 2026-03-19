@@ -8,8 +8,3 @@ export function assignConfidence(sources: Provenance[], _baseConfidence = 0.6): 
 	if (sourceCount >= 2) return 0.8;
 	return _baseConfidence;
 }
-
-export function boostConfidence(current: number, additionalSource: boolean): number {
-	if (!additionalSource) return current;
-	return Math.min(current + 0.05, 0.99);
-}

@@ -1,5 +1,6 @@
-import type { Entity, Provenance } from "../types.ts";
+import type { Entity } from "../types.ts";
 import { getDriver } from "./client.ts";
+import { neo4jToEntity } from "./upsert.ts";
 
 export interface GraphStats {
 	entities: number;
@@ -86,9 +87,11 @@ export interface RelatedEntity {
 	relationConfidence: number;
 }
 
-export async function queryRelated(name: string, _depth = 1): Promise<RelatedEntity[]> {
+export async function queryRelated(name: string, depth = 1): Promise<RelatedEntity[]> {
 	const driver = getDriver();
 	const session = driver.session();
+
+	const effectiveDepth = Math.max(1, Math.min(Math.trunc(depth), 5));
 
 	try {
 		const result = await session.run(
@@ -97,18 +100,18 @@ export async function queryRelated(name: string, _depth = 1): Promise<RelatedEnt
 			    OR $name IN [a IN e.aliases | toLower(a)]
 			 CALL {
 			   WITH e
-			   MATCH (e)-[r]->(related:Entity)
-			   RETURN related AS target, type(r) AS relType, "outgoing" AS dir,
-			          r.confidence AS relConf
+			   MATCH path = (e)-[r*1..${effectiveDepth}]->(related:Entity)
+			   RETURN related AS target, type(last(r)) AS relType, "outgoing" AS dir,
+			          last(r).confidence AS relConf, length(path) AS hops
 			   LIMIT 50
 			   UNION
 			   WITH e
-			   MATCH (e)<-[r]-(related:Entity)
-			   RETURN related AS target, type(r) AS relType, "incoming" AS dir,
-			          r.confidence AS relConf
+			   MATCH path = (e)<-[r*1..${effectiveDepth}]-(related:Entity)
+			   RETURN related AS target, type(last(r)) AS relType, "incoming" AS dir,
+			          last(r).confidence AS relConf, length(path) AS hops
 			   LIMIT 50
 			 }
-			 RETURN target, relType, dir, relConf
+			 RETURN DISTINCT target, relType, dir, relConf
 			 ORDER BY relConf DESC`,
 			{ name },
 		);
@@ -126,19 +129,32 @@ export async function queryRelated(name: string, _depth = 1): Promise<RelatedEnt
 	}
 }
 
-export async function searchEntities(query: string, limit = 20): Promise<Entity[]> {
+export async function searchEntities(
+	query: string,
+	options: { limit?: number; type?: string; minConfidence?: number } = {},
+): Promise<Entity[]> {
 	const driver = getDriver();
 	const session = driver.session();
+	const limit = Math.trunc(options.limit ?? 20);
+
+	const typeFilter = options.type ? "AND e.type = $type" : "";
+	const confidenceFilter = options.minConfidence ? "AND e.confidence >= $minConfidence" : "";
 
 	try {
 		const result = await session.run(
 			`MATCH (e:Entity)
-			 WHERE toLower(e.name) CONTAINS toLower($query)
-			    OR ANY(a IN e.aliases WHERE toLower(a) CONTAINS toLower($query))
+			 WHERE (toLower(e.name) CONTAINS toLower($query)
+			    OR ANY(a IN e.aliases WHERE toLower(a) CONTAINS toLower($query)))
+			 ${typeFilter}
+			 ${confidenceFilter}
 			 RETURN e
 			 ORDER BY e.confidence DESC
-			 LIMIT ${Math.trunc(limit)}`,
-			{ query },
+			 LIMIT ${limit}`,
+			{
+				query,
+				...(options.type ? { type: options.type } : {}),
+				...(options.minConfidence ? { minConfidence: options.minConfidence } : {}),
+			},
 		);
 
 		return result.records.map((record: { get: (key: string) => unknown }) =>
@@ -149,30 +165,88 @@ export async function searchEntities(query: string, limit = 20): Promise<Entity[
 	}
 }
 
-function parseSources(raw: unknown): Provenance[] {
-	if (typeof raw === "string") {
-		try {
-			return JSON.parse(raw) as Provenance[];
-		} catch {
-			return [];
-		}
+export async function queryHighConfidence(minConfidence = 0.8): Promise<Entity[]> {
+	const driver = getDriver();
+	const session = driver.session();
+
+	try {
+		const result = await session.run(
+			`MATCH (e:Entity)
+			 WHERE e.confidence >= $minConfidence
+			 RETURN e
+			 ORDER BY e.confidence DESC`,
+			{ minConfidence },
+		);
+
+		return result.records.map((record: { get: (key: string) => unknown }) =>
+			neo4jToEntity((record.get("e") as { properties: Record<string, unknown> }).properties),
+		);
+	} finally {
+		await session.close();
 	}
-	return (raw as Provenance[]) ?? [];
 }
 
-function neo4jToEntity(props: Record<string, unknown>): Entity {
-	return {
-		id: props.id as string,
-		name: props.name as string,
-		type: props.type as string,
-		aliases: (props.aliases as string[]) ?? [],
+export async function queryRecent(since: string): Promise<Entity[]> {
+	const driver = getDriver();
+	const session = driver.session();
+
+	try {
+		const result = await session.run(
+			`MATCH (e:Entity)
+			 WHERE e.createdAt >= $since OR e.updatedAt >= $since
+			 RETURN e
+			 ORDER BY e.updatedAt DESC`,
+			{ since },
+		);
+
+		return result.records.map((record: { get: (key: string) => unknown }) =>
+			neo4jToEntity((record.get("e") as { properties: Record<string, unknown> }).properties),
+		);
+	} finally {
+		await session.close();
+	}
+}
+
+export async function exportGraph(): Promise<{
+	entities: Entity[];
+	relations: {
+		id: string;
+		sourceId: string;
+		targetId: string;
+		type: string;
+		confidence: number;
+		properties: Record<string, unknown>;
+	}[];
+}> {
+	const driver = getDriver();
+
+	const entityResult = await driver.executeQuery(`MATCH (e:Entity) RETURN e ORDER BY e.name`);
+	const entities = entityResult.records.map((r) =>
+		neo4jToEntity((r.get("e") as { properties: Record<string, unknown> }).properties),
+	);
+
+	const relResult = await driver.executeQuery(
+		`MATCH (source:Entity)-[r]->(target:Entity)
+		 RETURN source.id AS sourceId, target.id AS targetId,
+		        type(r) AS type, r.id AS id,
+		        r.confidence AS confidence, r.properties AS properties`,
+	);
+	const relations = relResult.records.map((r) => ({
+		id: r.get("id") as string,
+		sourceId: r.get("sourceId") as string,
+		targetId: r.get("targetId") as string,
+		type: r.get("type") as string,
+		confidence: r.get("confidence") as number,
 		properties:
-			typeof props.properties === "string"
-				? (JSON.parse(props.properties as string) as Record<string, unknown>)
-				: ((props.properties as Record<string, unknown>) ?? {}),
-		confidence: props.confidence as number,
-		sources: parseSources(props.sources),
-		createdAt: props.createdAt as string,
-		updatedAt: props.updatedAt as string,
-	};
+			typeof r.get("properties") === "string"
+				? (JSON.parse(r.get("properties") as string) as Record<string, unknown>)
+				: ((r.get("properties") as Record<string, unknown>) ?? {}),
+	}));
+
+	return { entities, relations };
+}
+
+export async function clearGraph(): Promise<void> {
+	const driver = getDriver();
+	await driver.executeQuery("MATCH (n) DETACH DELETE n");
 }

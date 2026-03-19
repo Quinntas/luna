@@ -20,6 +20,22 @@ export function createRelationId(sourceId: string, targetId: string, type: strin
 	return generateRelationId(sourceId, targetId, type);
 }
 
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			return await fn();
+		} catch (err) {
+			lastError = err;
+			if (attempt < retries) {
+				const delay = Math.min(100 * 2 ** (attempt - 1), 2000);
+				await Bun.sleep(delay);
+			}
+		}
+	}
+	throw lastError;
+}
+
 export async function upsertEntity(
 	entity: Omit<Entity, "id" | "createdAt" | "updatedAt">,
 ): Promise<string> {
@@ -29,21 +45,27 @@ export async function upsertEntity(
 	const now = new Date().toISOString();
 
 	try {
-		const existing = await findEntityById(id);
-
-		if (!existing) {
-			await session.run(
-				`CREATE (e:Entity {
-					id: $id,
-					name: $name,
-					type: $type,
-					aliases: $aliases,
-					confidence: $confidence,
-					properties: $properties,
-					sources: $sources,
-					createdAt: $createdAt,
-					updatedAt: $createdAt
-				})`,
+		await withRetry(() =>
+			session.run(
+				`MERGE (e:Entity {id: $id})
+				 ON CREATE SET
+				   e.name = $name,
+				   e.type = $type,
+				   e.aliases = $aliases,
+				   e.confidence = $confidence,
+				   e.properties = $properties,
+				   e.sources = $sources,
+				   e.createdAt = $createdAt,
+				   e.updatedAt = $createdAt
+				 ON MATCH SET
+				   e.updatedAt = $updatedAt,
+				   e.aliases = apoc.coll.union(e.aliases, $aliases),
+				   e.confidence = CASE
+				     WHEN $confidence > e.confidence THEN $confidence
+				     ELSE e.confidence
+				   END,
+				   e.properties = $properties,
+				   e.sources = $sources`,
 				{
 					id,
 					name: entity.name,
@@ -53,33 +75,64 @@ export async function upsertEntity(
 					properties: JSON.stringify(entity.properties),
 					sources: JSON.stringify(entity.sources),
 					createdAt: now,
-				},
-			);
-		} else {
-			const mergedAliases = [...new Set([...existing.aliases, ...entity.aliases])];
-			const mergedSources = mergeSources(existing.sources, entity.sources);
-			const mergedProperties = { ...entity.properties, ...existing.properties };
-			const maxConfidence = Math.max(existing.confidence, entity.confidence);
-
-			await session.run(
-				`MATCH (e:Entity {id: $id})
-				 SET e.aliases = $aliases,
-				     e.confidence = $confidence,
-				     e.properties = $properties,
-				     e.sources = $sources,
-				     e.updatedAt = $updatedAt`,
-				{
-					id,
-					aliases: mergedAliases,
-					confidence: maxConfidence,
-					properties: JSON.stringify(mergedProperties),
-					sources: JSON.stringify(mergedSources),
 					updatedAt: now,
 				},
-			);
-		}
+			),
+		);
 
 		return id;
+	} finally {
+		await session.close();
+	}
+}
+
+export async function upsertEntities(
+	entities: Omit<Entity, "id" | "createdAt" | "updatedAt">[],
+): Promise<string[]> {
+	const driver = getDriver();
+	const session = driver.session();
+	const now = new Date().toISOString();
+
+	try {
+		const data = entities.map((entity) => ({
+			id: generateEntityId(entity.name, entity.type),
+			name: entity.name,
+			type: entity.type,
+			aliases: entity.aliases,
+			confidence: entity.confidence,
+			properties: JSON.stringify(entity.properties),
+			sources: JSON.stringify(entity.sources),
+			createdAt: now,
+			updatedAt: now,
+		}));
+
+		await withRetry(() =>
+			session.run(
+				`UNWIND $entities AS ent
+				 MERGE (e:Entity {id: ent.id})
+				 ON CREATE SET
+				   e.name = ent.name,
+				   e.type = ent.type,
+				   e.aliases = ent.aliases,
+				   e.confidence = ent.confidence,
+				   e.properties = ent.properties,
+				   e.sources = ent.sources,
+				   e.createdAt = ent.createdAt,
+				   e.updatedAt = ent.createdAt
+				 ON MATCH SET
+				   e.updatedAt = ent.updatedAt,
+				   e.aliases = apoc.coll.union(e.aliases, ent.aliases),
+				   e.confidence = CASE
+				     WHEN ent.confidence > e.confidence THEN ent.confidence
+				     ELSE e.confidence
+				   END,
+				   e.properties = ent.properties,
+				   e.sources = ent.sources`,
+				{ entities: data },
+			),
+		);
+
+		return data.map((d) => d.id);
 	} finally {
 		await session.close();
 	}
@@ -91,22 +144,21 @@ export async function upsertRelation(relation: Omit<Relation, "id">): Promise<st
 	const id = generateRelationId(relation.sourceId, relation.targetId, relation.type);
 
 	try {
-		const result = await session.run(
-			`MATCH (source:Entity {id: $sourceId})-[r:\`${relation.type}\`]->(target:Entity {id: $targetId})
-			 RETURN r.id AS rid, r.confidence AS conf, r.sources AS srcs`,
-			{ sourceId: relation.sourceId, targetId: relation.targetId },
-		);
-
-		if (result.records.length === 0) {
-			await session.run(
+		await withRetry(() =>
+			session.run(
 				`MATCH (source:Entity {id: $sourceId})
 				 MATCH (target:Entity {id: $targetId})
-				 CREATE (source)-[r:\`${relation.type}\` {
-				   id: $id,
-				   confidence: $confidence,
-				   properties: $properties,
-				   sources: $sources
-				 }]->(target)`,
+				 MERGE (source)-[r:\`${relation.type}\`]->(target)
+				 ON CREATE SET
+				   r.id = $id,
+				   r.confidence = $confidence,
+				   r.properties = $properties,
+				   r.sources = $sources
+				 ON MATCH SET
+				   r.confidence = CASE
+				     WHEN $confidence > r.confidence THEN $confidence
+				     ELSE r.confidence
+				   END`,
 				{
 					id,
 					sourceId: relation.sourceId,
@@ -115,26 +167,8 @@ export async function upsertRelation(relation: Omit<Relation, "id">): Promise<st
 					properties: JSON.stringify(relation.properties),
 					sources: JSON.stringify(relation.sources),
 				},
-			);
-		} else {
-			const record = result.records[0];
-			if (!record) return id;
-			const existingConfidence = record.get("conf") as number;
-			const existingSources = parseSources(record.get("srcs"));
-			const mergedSources = mergeSources(existingSources, relation.sources);
-			const maxConfidence = Math.max(existingConfidence, relation.confidence);
-
-			await session.run(
-				`MATCH ()-[r {id: $id}]->()
-				 SET r.confidence = $confidence,
-				     r.sources = $sources`,
-				{
-					id: record.get("rid") as string,
-					confidence: maxConfidence,
-					sources: JSON.stringify(mergedSources),
-				},
-			);
-		}
+			),
+		);
 
 		return id;
 	} finally {
@@ -142,23 +176,43 @@ export async function upsertRelation(relation: Omit<Relation, "id">): Promise<st
 	}
 }
 
-export async function findEntityByName(name: string): Promise<Entity | null> {
+export async function upsertRelations(relations: Omit<Relation, "id">[]): Promise<string[]> {
 	const driver = getDriver();
 	const session = driver.session();
 
 	try {
-		const result = await session.run(
-			`MATCH (e:Entity)
-			 WHERE toLower(e.name) = toLower($name)
-			    OR $name IN [a IN e.aliases | toLower(a)]
-			 RETURN e LIMIT 1`,
-			{ name },
-		);
+		const data = relations.map((rel) => ({
+			id: generateRelationId(rel.sourceId, rel.targetId, rel.type),
+			sourceId: rel.sourceId,
+			targetId: rel.targetId,
+			type: rel.type,
+			confidence: rel.confidence,
+			properties: JSON.stringify(rel.properties),
+			sources: JSON.stringify(rel.sources),
+		}));
 
-		if (result.records.length === 0) return null;
+		for (const rel of data) {
+			await withRetry(() =>
+				session.run(
+					`MATCH (source:Entity {id: $sourceId})
+					 MATCH (target:Entity {id: $targetId})
+					 MERGE (source)-[r:\`${rel.type}\`]->(target)
+					 ON CREATE SET
+					   r.id = $id,
+					   r.confidence = $confidence,
+					   r.properties = $properties,
+					   r.sources = $sources
+					 ON MATCH SET
+					   r.confidence = CASE
+					     WHEN $confidence > r.confidence THEN $confidence
+					     ELSE r.confidence
+					   END`,
+					rel,
+				),
+			);
+		}
 
-		const props = result.records[0]?.get("e").properties;
-		return neo4jToEntity(props);
+		return data.map((d) => d.id);
 	} finally {
 		await session.close();
 	}
@@ -169,7 +223,9 @@ export async function findEntityById(id: string): Promise<Entity | null> {
 	const session = driver.session();
 
 	try {
-		const result = await session.run(`MATCH (e:Entity {id: $id}) RETURN e LIMIT 1`, { id });
+		const result = await withRetry(() =>
+			session.run(`MATCH (e:Entity {id: $id}) RETURN e LIMIT 1`, { id }),
+		);
 
 		if (result.records.length === 0) return null;
 
@@ -180,27 +236,105 @@ export async function findEntityById(id: string): Promise<Entity | null> {
 	}
 }
 
+export async function findEntitiesByIds(ids: string[]): Promise<Map<string, Entity>> {
+	const driver = getDriver();
+	const session = driver.session();
+	const result = new Map<string, Entity>();
+
+	if (ids.length === 0) return result;
+
+	try {
+		const records = await withRetry(() =>
+			session.run(`MATCH (e:Entity) WHERE e.id IN $ids RETURN e`, { ids }),
+		);
+
+		for (const record of records.records) {
+			const entity = neo4jToEntity(
+				(record.get("e") as { properties: Record<string, unknown> }).properties,
+			);
+			result.set(entity.id, entity);
+		}
+
+		return result;
+	} finally {
+		await session.close();
+	}
+}
+
+export async function findEntityByName(name: string): Promise<Entity | null> {
+	const driver = getDriver();
+	const session = driver.session();
+
+	try {
+		const result = await withRetry(() =>
+			session.run(
+				`MATCH (e:Entity)
+				 WHERE toLower(e.name) = toLower($name)
+				    OR $name IN [a IN e.aliases | toLower(a)]
+				 RETURN e LIMIT 1`,
+				{ name },
+			),
+		);
+
+		if (result.records.length === 0) return null;
+
+		const props = result.records[0]?.get("e").properties;
+		return neo4jToEntity(props);
+	} finally {
+		await session.close();
+	}
+}
+
+export async function updateEntityProperties(
+	id: string,
+	properties: Record<string, unknown>,
+): Promise<void> {
+	const driver = getDriver();
+	const session = driver.session();
+
+	try {
+		await withRetry(() =>
+			session.run(
+				`MATCH (e:Entity {id: $id})
+				 SET e.properties = $properties, e.updatedAt = $updatedAt`,
+				{ id, properties: JSON.stringify(properties), updatedAt: new Date().toISOString() },
+			),
+		);
+	} finally {
+		await session.close();
+	}
+}
+
 export async function removeSource(sourceRef: string): Promise<number> {
 	const driver = getDriver();
 	const session = driver.session();
 
 	try {
-		const result = await session.run(
-			`MATCH (e:Entity)
-			 WHERE e.sources CONTAINS $sourceRef
-			 RETURN e.id AS id, e.sources AS srcs`,
-			{ sourceRef },
+		const result = await withRetry(() =>
+			session.run(`MATCH (e:Entity) RETURN e.id AS id, e.sources AS srcs`),
 		);
 
 		let deleted = 0;
 		for (const record of result.records) {
 			const sources = parseSources(record.get("srcs"));
+			const hasSource = sources.some((s) => s.sourceRef === sourceRef);
+			if (!hasSource) continue;
+
 			const remaining = sources.filter((s) => s.sourceRef !== sourceRef);
 			if (remaining.length === 0) {
-				await session.run(`MATCH (e:Entity {id: $id}) DETACH DELETE e`, {
-					id: record.get("id") as string,
-				});
+				await withRetry(() =>
+					session.run(`MATCH (e:Entity {id: $id}) DETACH DELETE e`, {
+						id: record.get("id") as string,
+					}),
+				);
 				deleted++;
+			} else {
+				await withRetry(() =>
+					session.run(`MATCH (e:Entity {id: $id}) SET e.sources = $sources`, {
+						id: record.get("id") as string,
+						sources: JSON.stringify(remaining),
+					}),
+				);
 			}
 		}
 
@@ -208,21 +342,6 @@ export async function removeSource(sourceRef: string): Promise<number> {
 	} finally {
 		await session.close();
 	}
-}
-
-function mergeSources(a: Provenance[], b: Provenance[]): Provenance[] {
-	const seen = new Set<string>();
-	const merged: Provenance[] = [];
-
-	for (const p of [...a, ...b]) {
-		const key = `${p.sourceType}:${p.sourceRef}:${p.chunkIndex ?? ""}`;
-		if (!seen.has(key)) {
-			seen.add(key);
-			merged.push(p);
-		}
-	}
-
-	return merged;
 }
 
 function parseSources(raw: unknown): Provenance[] {
@@ -236,7 +355,7 @@ function parseSources(raw: unknown): Provenance[] {
 	return (raw as Provenance[]) ?? [];
 }
 
-function neo4jToEntity(props: Record<string, unknown>): Entity {
+export function neo4jToEntity(props: Record<string, unknown>): Entity {
 	return {
 		id: props.id as string,
 		name: props.name as string,

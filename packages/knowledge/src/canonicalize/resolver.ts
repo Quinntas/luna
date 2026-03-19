@@ -1,5 +1,33 @@
 import { createEntityId } from "../graph/upsert.ts";
-import type { Entity, ExtractedEntity, Provenance } from "../types.ts";
+import type { Entity, ExtractedEntity, ExtractedRelation, Provenance } from "../types.ts";
+
+const RELATION_SYNONYMS: Record<string, string> = {
+	WORKS_FOR: "WORKS_AT",
+	EMPLOYED_BY: "WORKS_AT",
+	WORKING_AT: "WORKS_AT",
+	EMPLOYED_AT: "WORKS_AT",
+	BASED_IN: "LOCATED_IN",
+	SITUATED_IN: "LOCATED_IN",
+	HEADQUARTERED_IN: "LOCATED_IN",
+	HQ_IN: "LOCATED_IN",
+	PART_OF: "MEMBER_OF",
+	BELONGS_TO: "MEMBER_OF",
+	KNOWS: "ACQUAINTED_WITH",
+	FRIEND_OF: "ACQUAINTED_WITH",
+	COLLEAGUE_OF: "WORKS_WITH",
+	CO_FOUNDER: "CO_FOUNDER_OF",
+};
+
+export function normalizeRelationType(type: string): string {
+	return RELATION_SYNONYMS[type] ?? type;
+}
+
+export function normalizeRelations(relations: ExtractedRelation[]): ExtractedRelation[] {
+	return relations.map((rel) => ({
+		...rel,
+		type: normalizeRelationType(rel.type),
+	}));
+}
 
 function levenshtein(a: string, b: string): number {
 	const m = a.length;

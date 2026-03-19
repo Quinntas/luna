@@ -11,7 +11,11 @@
 		"query": "bun run scripts/query.ts",
 		"stats": "bun run scripts/stats.ts",
 		"resolve": "bun run scripts/resolve-conflicts.ts",
-		"init": "bun run scripts/init-schema.ts"
+		"init": "bun run scripts/init-schema.ts",
+		"reset": "bun run scripts/reset.ts",
+		"export": "bun run scripts/export.ts",
+		"import": "bun run scripts/import.ts",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@luna/ai": "workspace:*",

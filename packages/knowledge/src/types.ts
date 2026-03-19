@@ -89,4 +89,6 @@ export interface IngestionResult {
 	relationsCreated: number;
 	conflicts: Conflict[];
 	chunksProcessed: number;
+	durationMs: number;
+	entityNames: string[];
 }

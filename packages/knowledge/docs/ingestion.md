@@ -5,7 +5,7 @@
 Text goes in. Entities and relationships come out. Here's the pipeline:
 
 ```
-Raw Text → Chunking → LLM Extraction → Canonicalization → Validation → Neo4j
+Raw Text → [Language Detection] → [Translation] → Chunking → LLM Extraction → Canonicalization → Validation → Neo4j
 ```
 
 ## Input Methods
@@ -33,6 +33,29 @@ bun run knowledge:ingest ./notes/
 ```
 
 Processes all `.txt`, `.md`, `.json`, and `.csv` files. Skips subdirectories and other extensions.
+
+## Multilingual Support
+
+Text in any language is automatically detected and translated to English before extraction. This ensures consistent entity names regardless of the source language.
+
+**Supported languages**: Portuguese (pt-BR), Spanish, French, German, Italian, Japanese, Chinese, Korean, Russian, and 70+ more via `franc-min`.
+
+**How it works**:
+1. `franc-min` detects the language of the input text
+2. If not English, Gemini translates the full text to English
+3. Translation preserves proper names, dates, company names, and technical terms
+4. The translated text is then chunked and extracted normally
+
+**Example**:
+```bash
+# Portuguese input
+echo "Maria Silva trabalha na Petrobras no Rio de Janeiro." | bun run knowledge:ingest -
+
+# Output: Detected Portuguese, translating to English...
+# Entities extracted: Maria Silva (Person), Petrobras (Organization), Rio de Janeiro (Location)
+```
+
+The original text is preserved in the provenance (`rawText`) for traceability.
 
 ## Chunking
 

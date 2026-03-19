@@ -84,7 +84,11 @@ bun run knowledge:setup     # Start Neo4j + init schema
 bun run knowledge:ingest     # Ingest text (pipe via stdin or pass file path)
 bun run knowledge:query      # Query entities
 bun run knowledge:stats      # Graph overview
-bun run knowledge:resolve    # Resolve conflicts
+bun run knowledge:resolve    # Resolve conflicts (auto-apply to graph)
+bun run knowledge:reset      # Clear graph + re-init schema (3s delay)
+bun run knowledge:export     # Export graph to JSON
+bun run knowledge:import     # Import graph from JSON
+bun run knowledge:test       # Run unit tests
 ```
 
 ### Per-package (from `packages/<name>/`)

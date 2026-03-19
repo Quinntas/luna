@@ -36,9 +36,7 @@ function buildModel(provider: Provider, model: string): LanguageModel {
 			const url = process.env.LITELLM_URL;
 			const key = process.env.LITELLM_KEY;
 			if (!url || !key) {
-				throw new Error(
-					"LITELLM_URL and LITELLM_KEY are required when AI_PROVIDER=litellm",
-				);
+				throw new Error("LITELLM_URL and LITELLM_KEY are required when AI_PROVIDER=litellm");
 			}
 			return createLiteLLMModel(model, url, key);
 		}
