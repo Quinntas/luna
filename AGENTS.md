@@ -7,28 +7,59 @@ Instructions for coding in the Luna monorepo.
 ```
 luna/
 ├── packages/
-│   ├── ai/              # @luna/ai — AI model abstraction (provider-agnostic)
-│   └── knowledge/       # @luna/knowledge — Knowledge graph (ingestion, Neo4j, queries)
-├── apps/                # Future apps that consume packages
-├── src/                 # Root entry point
-├── biome.json           # Linter/formatter config (root)
-├── tsconfig.base.json   # Shared TypeScript config
-├── bunfig.toml          # Bun workspace config
-├── docker-compose.yml   # Neo4j container
-└── .env                 # Environment variables (gitignored)
+│   ├── env/              # @luna/env — Env loading, Zod validation (dotenv)
+│   ├── guard/            # @luna/guard — PII detection, redaction, sensitivity classification
+│   ├── ai/               # @luna/ai — AI model abstraction (Gemini, LiteLLM)
+│   ├── prompts/          # @luna/prompts — All prompt templates (dedent)
+│   ├── db/               # @luna/db — Drizzle ORM + SQLite (tools, preferences, logs)
+│   ├── knowledge/        # @luna/knowledge — Knowledge graph (Neo4j, extraction, RAG)
+│   ├── rlm/              # @luna/rlm — Recursive Language Models + ReAct agent
+│   ├── memory/           # @luna/memory — Fact extraction, tiered memory, TTL
+│   ├── vision/           # @luna/vision — Image/document understanding
+│   ├── tools/            # @luna/tools — Tool registry, search, execution
+│   └── personalize/      # @luna/personalize — User preferences, style adaptation
+├── apps/                 # Future apps that consume packages
+├── src/                  # Root entry point
+├── biome.json            # Linter/formatter config (root)
+├── tsconfig.base.json    # Shared TypeScript config
+├── bunfig.toml           # Bun workspace config
+├── docker-compose.yml    # Neo4j container
+└── .env                  # Environment variables (gitignored)
 ```
 
 ## Packages
 
-| Package | Import | Purpose |
-|---|---|---|
-| `@luna/ai` | `packages/ai/` | Model factory, provider config (Gemini, LiteLLM) |
-| `@luna/knowledge` | `packages/knowledge/` | Knowledge graph: extraction, Neo4j, ingestion, queries |
+| Package | Purpose |
+|---|---|
+| `@luna/env` | Env loading (dotenv + Zod). All other packages use this. |
+| `@luna/guard` | PII detection (SSN, email, phone, credit card). Sensitivity classification. |
+| `@luna/ai` | Model factory (Gemini, LiteLLM). Data classification routing. |
+| `@luna/prompts` | All 20 prompt functions across 6 domains (agent, knowledge, memory, rag, rlm, vision). |
+| `@luna/db` | Drizzle ORM + SQLite. Tools registry, user preferences, ingestion log. |
+| `@luna/knowledge` | Knowledge graph (Neo4j). Entity/relation extraction, RAG (Self-RAG, CRAG). |
+| `@luna/rlm` | Recursive Language Models (QuickJS sandbox). ReAct agent. Reflexion. |
+| `@luna/memory` | Tiered memory (working/short_term/long_term). Configurable TTL. |
+| `@luna/vision` | Image/document understanding via vision models. |
+| `@luna/tools` | Tool registry (persisted in SQLite). Search, execute, validate. |
+| `@luna/personalize` | User preferences (persisted in SQLite). Style adaptation. |
 
-### Internal dependencies
+### Internal Dependencies
 
-- `@luna/knowledge` depends on `@luna/ai` via `"@luna/ai": "workspace:*"`
-- Use `workspace:*` for cross-package references in `package.json`
+```
+@luna/env           (dotenv, zod)
+@luna/guard         (no deps)
+@luna/ai            (@luna/env, ai, @ai-sdk/google, @ai-sdk/openai-compatible)
+@luna/prompts       (dedent)
+@luna/db            (drizzle-orm)
+@luna/knowledge     (@luna/ai, @luna/env, @luna/prompts, ai, neo4j-driver, franc-min)
+@luna/memory        (@luna/ai, @luna/knowledge, @luna/prompts, ai, zod)
+@luna/rlm           (@luna/prompts, ai, quickjs-emscripten, zod)
+@luna/vision        (@luna/prompts, ai)
+@luna/tools         (@luna/db, @luna/ai, ai, zod)
+@luna/personalize   (@luna/db, @luna/ai, ai)
+```
+
+Use `workspace:*` for cross-package references.
 
 ## Code Style
 
@@ -46,7 +77,6 @@ Enforced by Biome. Run `bun run check` to auto-fix everything.
 ### Import conventions
 
 ```typescript
-// External deps first, then internal, then relative
 import { generateObject } from "ai";
 import { getModel } from "@luna/ai";
 import { config } from "../config.ts";
@@ -76,7 +106,7 @@ bun run lint
 # Format only
 bun run format
 
-# Typecheck all packages
+# Typecheck all 11 packages
 bun run typecheck
 
 # Knowledge graph shortcuts
@@ -103,16 +133,10 @@ Run these before considering work complete:
 
 ```bash
 bun run check          # Lint + format all files
-bun run typecheck      # Verify types across packages
+bun run typecheck      # Verify types across all 11 packages
 ```
 
 Both must pass with zero errors.
-
-If you added a new package, typecheck it explicitly:
-
-```bash
-bunx tsc --noEmit --project packages/<name>/tsconfig.json
-```
 
 ## Adding a New Package
 
@@ -120,25 +144,8 @@ bunx tsc --noEmit --project packages/<name>/tsconfig.json
    - `package.json` — `"name": "@luna/<name>"`, `"type": "module"`, `"exports": { ".": "./src/index.ts" }`
    - `tsconfig.json` — `{ "extends": "../../tsconfig.base.json", "include": ["src/**/*.ts"] }`
    - `src/index.ts` — public API exports
-
-2. Internal deps use `workspace:*`:
-   ```json
-   "dependencies": { "@luna/ai": "workspace:*" }
-   ```
-
-3. Run `bun install` to link.
-
-## Adding a New Script
-
-1. Create `packages/<name>/scripts/<script>.ts`
-2. Add to the package's `package.json` scripts:
-   ```json
-   "scripts": { "my-script": "bun run scripts/my-script.ts" }
-   ```
-3. Optionally add a root shortcut in root `package.json`:
-   ```json
-   "name:my-script": "bun run packages/name/scripts/my-script.ts"
-   ```
+2. Internal deps use `workspace:*`
+3. Run `bun install` to link
 
 ## Environment Variables
 
@@ -154,28 +161,21 @@ Configured in `.env` (root). See `.env.example` for all options.
 | `GEMINI_API_KEY` | If `gemini` | — |
 | `LITELLM_URL` | If `litellm` | — |
 | `LITELLM_KEY` | If `litellm` | — |
-
-All env validation uses Zod. Invalid/missing vars fail at startup with clear messages.
+| `LUNA_DB_PATH` | No | `data/luna.db` |
 
 ## Neo4j
 
 - Runs via Docker: `docker compose up -d`
 - Browser UI: http://localhost:7474 (neo4j / luna_dev_password)
 - Schema init: `bun run knowledge:setup` (creates constraints + indexes)
-- Properties and sources are stored as JSON strings (Neo4j can't store maps)
-- Merging is done in TypeScript (read-then-write), not via Cypher
+- APOC plugin included for list operations
+- Properties and sources stored as JSON strings (Neo4j can't store maps)
 
-## Documentation
+## Storage
 
-Each package has a `docs/` directory with markdown files:
-
-```
-packages/knowledge/docs/
-├── overview.md          # Architecture, data flow
-├── setup.md             # Prerequisites, quick start, env vars
-├── ingestion.md         # How ingestion pipeline works
-├── graph-schema.md      # Neo4j node/edge structure
-└── anti-poisoning.md    # Confidence, conflicts, provenance
-```
-
-Update docs when changing public behavior, adding env vars, or modifying the data model.
+| Data | Backend | Package |
+|---|---|---|
+| Knowledge graph (entities, relations) | Neo4j | `@luna/knowledge` |
+| Memories (with TTL) | Neo4j (in-memory Map with expiry) | `@luna/memory` |
+| Tool registry | SQLite (Drizzle) | `@luna/db` + `@luna/tools` |
+| User preferences | SQLite (Drizzle) | `@luna/db` + `@luna/personalize` |

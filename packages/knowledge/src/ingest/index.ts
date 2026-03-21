@@ -92,6 +92,7 @@ async function processChunk(
 		entitiesCreated,
 		entitiesMerged,
 		relationsCreated: relationsToUpsert.length,
+		entityNames: canonicalized.map((c) => c.entity.name),
 	};
 }
 
@@ -118,6 +119,7 @@ async function processChunksParallel(
 		entitiesCreated: number;
 		entitiesMerged: number;
 		relationsCreated: number;
+		entityNames: string[];
 	}[] = [];
 
 	for (let i = 0; i < chunks.length; i += maxConcurrent) {
@@ -138,6 +140,7 @@ async function processChunksParallel(
 		entitiesCreated += result.entitiesCreated;
 		entitiesMerged += result.entitiesMerged;
 		relationsCreated += result.relationsCreated;
+		allEntityNames.push(...result.entityNames);
 	}
 
 	return {
@@ -170,7 +173,7 @@ export async function ingestText(
 	const config = getConfig();
 	const maxConcurrent = config.extraction.maxConcurrent;
 
-	const { entitiesCreated, entitiesMerged, relationsCreated, conflicts } =
+	const { entitiesCreated, entitiesMerged, relationsCreated, conflicts, entityNames } =
 		await processChunksParallel(chunks, model, sourceType, sourceRef, maxConcurrent);
 
 	const durationMs = Math.round(performance.now() - startTime);
@@ -182,7 +185,7 @@ export async function ingestText(
 		conflicts,
 		chunksProcessed: chunks.length,
 		durationMs,
-		entityNames: [],
+		entityNames,
 	};
 }
 

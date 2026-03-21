@@ -30,7 +30,7 @@ export function createLiteLLMModel(
 				body: JSON.stringify({
 					...body,
 					metadata: { tags },
-					cache: cache ? { "no-cache": true } : {},
+					cache: cache ? {} : { "no-cache": true },
 				}),
 			});
 		}) as typeof fetch,

@@ -22,7 +22,8 @@
 		"@luna/env": "workspace:*",
 		"@luna/prompts": "workspace:*",
 		"neo4j-driver": "^5.28.0",
-		"ai": "^4.3.0"
+		"ai": "^4.3.0",
+		"franc-min": "^6.2.0"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

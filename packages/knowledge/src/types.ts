@@ -92,3 +92,16 @@ export interface IngestionResult {
 	durationMs: number;
 	entityNames: string[];
 }
+
+export interface UserProfile {
+	id: string;
+	name: string;
+	preferences: Record<string, unknown>;
+	writingStyle: {
+		formality: "casual" | "neutral" | "formal";
+		avgSentenceLength: number;
+		commonTerms: string[];
+	};
+	topics: string[];
+	updatedAt: string;
+}

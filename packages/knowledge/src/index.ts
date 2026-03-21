@@ -26,7 +26,16 @@ export {
 	upsertEntity,
 	upsertRelation,
 } from "./graph/upsert.ts";
+export {
+	analyzeWritingStyle,
+	getProfile,
+	updateProfile,
+} from "./graph/user.ts";
 export { ingestDirectory, ingestFile, ingestText } from "./ingest/index.ts";
+export type { CragResult } from "./rag/crag.ts";
+export { cragQuery } from "./rag/crag.ts";
+export type { SelfRagResult } from "./rag/self-rag.ts";
+export { selfRagQuery } from "./rag/self-rag.ts";
 export type {
 	Conflict,
 	Entity,
@@ -34,6 +43,7 @@ export type {
 	IngestionResult,
 	Provenance,
 	Relation,
+	UserProfile,
 } from "./types.ts";
 export { assignConfidence } from "./validate/confidence.ts";
 export { createProvenance } from "./validate/provenance.ts";
