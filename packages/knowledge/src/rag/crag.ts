@@ -1,5 +1,5 @@
-import { getModel } from "@luna/ai";
 import { cragQueryRewritePrompt, cragRelevancePrompt } from "@luna/prompts";
+import type { LanguageModel } from "ai";
 import { generateText } from "ai";
 import { searchEntities } from "../graph/queries.ts";
 import type { Entity } from "../types.ts";
@@ -11,9 +11,7 @@ export interface CragResult {
 	passages: string[];
 }
 
-export async function cragQuery(query: string): Promise<CragResult> {
-	const model = getModel();
-
+export async function cragQuery(query: string, model: LanguageModel): Promise<CragResult> {
 	const entities = await searchEntities(query, { limit: 5 });
 
 	if (entities.length === 0) {

@@ -1,4 +1,9 @@
-export { reactSystemPrompt, reactUserPrompt } from "./agent/react.ts";
+export { intentClassificationPrompt } from "./agent/intent.ts";
+export type { MoodLabel } from "./agent/mood.ts";
+export { buildMoodPrompt, getMoodStatus } from "./agent/mood.ts";
+export type { PersonalityProfile, PersonalityVector } from "./agent/personality.ts";
+export { buildPersonalityPrompt, LUNA_DEFAULT_PERSONALITY } from "./agent/personality.ts";
+export { agentSystemPrompt } from "./agent/react.ts";
 export { reflexionCritiquePrompt } from "./agent/reflexion.ts";
 export { knowledgeExtractionPrompt } from "./knowledge/extraction.ts";
 export { translationPrompt } from "./knowledge/translation.ts";

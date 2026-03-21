@@ -13,6 +13,9 @@ export function factExtractionPrompt(messages: string): string {
 		- Capture plans (what they want to do)
 		- Capture relationships (who they know, work with)
 		- Do NOT extract generic advice or assistant responses
+		- Do NOT extract facts from trivial exchanges including: greetings ("hey", "hello", "what's up"), small talk ("nothing much", "just chilling"), insults ("fuck you"), jokes, or filler ("ok", "cool", "nice", "lol")
+		- Only extract facts when the user shares meaningful personal information or asks a substantive question
+		- If the conversation contains no salient facts, return an empty array []
 		- Rate each fact's importance: high (critical personal info), medium (useful context), low (trivial detail)
 
 		Conversation:

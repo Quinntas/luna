@@ -1,8 +1,8 @@
 import { getAllMemories } from "./store.ts";
 import type { Memory } from "./types.ts";
 
-export function retrieveRelevant(query: string, limit = 10): Memory[] {
-	const all = getAllMemories();
+export async function retrieveRelevant(query: string, limit = 10): Promise<Memory[]> {
+	const all = await getAllMemories();
 	const queryLower = query.toLowerCase();
 	const queryTerms = queryLower.split(/\s+/).filter((t) => t.length > 2);
 

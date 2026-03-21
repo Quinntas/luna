@@ -144,6 +144,7 @@ export async function searchEntities(
 		const result = await session.run(
 			`MATCH (e:Entity)
 			 WHERE (toLower(e.name) CONTAINS toLower($query)
+			    OR toLower($query) CONTAINS toLower(e.name)
 			    OR ANY(a IN e.aliases WHERE toLower(a) CONTAINS toLower($query)))
 			 ${typeFilter}
 			 ${confidenceFilter}

@@ -10,6 +10,24 @@
         "typescript": "^5",
       },
     },
+    "apps/agent": {
+      "name": "@luna/agent",
+      "version": "0.1.0",
+      "dependencies": {
+        "@luna/ai": "workspace:*",
+        "@luna/guard": "workspace:*",
+        "@luna/knowledge": "workspace:*",
+        "@luna/memory": "workspace:*",
+        "@luna/personalize": "workspace:*",
+        "@luna/prompts": "workspace:*",
+        "@luna/rlm": "workspace:*",
+        "@luna/tools": "workspace:*",
+        "ai": "^4.3.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
     "packages/ai": {
       "name": "@luna/ai",
       "version": "0.1.0",
@@ -87,7 +105,9 @@
       "dependencies": {
         "@luna/ai": "workspace:*",
         "@luna/db": "workspace:*",
+        "@luna/prompts": "workspace:*",
         "ai": "^4.3.0",
+        "zod": "^3.24.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -122,6 +142,9 @@
       "dependencies": {
         "@luna/ai": "workspace:*",
         "@luna/db": "workspace:*",
+        "@luna/knowledge": "workspace:*",
+        "@luna/memory": "workspace:*",
+        "@luna/personalize": "workspace:*",
         "ai": "^4.3.0",
         "zod": "^3.24.0",
       },
@@ -233,6 +256,8 @@
     "@jitl/quickjs-wasmfile-release-asyncify": ["@jitl/quickjs-wasmfile-release-asyncify@0.31.0", "", { "dependencies": { "@jitl/quickjs-ffi-types": "0.31.0" } }, "sha512-uz0BbQYTxNsFkvkurd7vk2dOg57ElTBLCuvNtRl4rgrtbC++NIndD5qv2+AXb6yXDD3Uy1O2PCwmoaH0eXgEOg=="],
 
     "@jitl/quickjs-wasmfile-release-sync": ["@jitl/quickjs-wasmfile-release-sync@0.31.0", "", { "dependencies": { "@jitl/quickjs-ffi-types": "0.31.0" } }, "sha512-hYduecOByj9AsAfsJhZh5nA6exokmuFC8cls39+lYmTCGY51bgjJJJwReEu7Ff7vBWaQCL6TeDdVlnp2WYz0jw=="],
+
+    "@luna/agent": ["@luna/agent@workspace:apps/agent"],
 
     "@luna/ai": ["@luna/ai@workspace:packages/ai"],
 

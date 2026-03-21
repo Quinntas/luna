@@ -76,3 +76,21 @@ export function learnFromFeedback(correction: string, _context: string): void {
 
 	setPreferences(prefs);
 }
+
+export {
+	applyMoodEvent,
+	BASELINE_MOOD,
+	classifyUserMessage,
+	decayTowardBaseline,
+	getMood,
+	processMood,
+	setMood,
+} from "./mood-engine.ts";
+
+export type {
+	MoodEvent,
+	MoodState,
+	ResponseLength,
+	UserPreferences,
+	UserProfile,
+} from "./types.ts";

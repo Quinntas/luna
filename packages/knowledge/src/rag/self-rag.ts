@@ -1,9 +1,9 @@
-import { getModel } from "@luna/ai";
 import {
 	selfRagCritiquePrompt,
 	selfRagRelevancePrompt,
 	selfRagRetrieveDecisionPrompt,
 } from "@luna/prompts";
+import type { LanguageModel } from "ai";
 import { generateText } from "ai";
 import { searchEntities } from "../graph/queries.ts";
 import type { Entity } from "../types.ts";
@@ -15,9 +15,7 @@ export interface SelfRagResult {
 	passages: string[];
 }
 
-export async function selfRagQuery(query: string): Promise<SelfRagResult> {
-	const model = getModel();
-
+export async function selfRagQuery(query: string, model: LanguageModel): Promise<SelfRagResult> {
 	const { text: shouldRetrieve } = await generateText({
 		model,
 		prompt: selfRagRetrieveDecisionPrompt(query),

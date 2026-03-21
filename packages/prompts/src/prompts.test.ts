@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+	agentSystemPrompt,
 	cragQueryRewritePrompt,
 	cragRelevancePrompt,
 	factExtractionPrompt,
 	knowledgeExtractionPrompt,
 	memoryRelevancePrompt,
 	pdfPageAnalysisPrompt,
-	reactSystemPrompt,
-	reactUserPrompt,
 	reflexionCritiquePrompt,
 	rlmExecutionFeedback,
 	rlmFirstTurnPrompt,
@@ -23,20 +22,15 @@ import {
 } from "./index.ts";
 
 describe("agent prompts", () => {
-	test("reactSystemPrompt contains tool format", () => {
-		const prompt = reactSystemPrompt(["calculator", "search"]);
-		expect(prompt).toContain("Thought:");
-		expect(prompt).toContain("Action:");
-		expect(prompt).toContain("Action Input:");
-		expect(prompt).toContain("Observation:");
-		expect(prompt).toContain("Final Answer:");
+	test("agentSystemPrompt contains tool format and cutoff date", () => {
+		const prompt = agentSystemPrompt(["calculator", "search"], "2024-12-31", "2025-03-21");
+		expect(prompt).toContain("tools");
 		expect(prompt).toContain("calculator");
 		expect(prompt).toContain("search");
-	});
-
-	test("reactUserPrompt contains query", () => {
-		const prompt = reactUserPrompt("What is 2+2?");
-		expect(prompt).toContain("What is 2+2?");
+		expect(prompt).toContain("knowledge cutoff");
+		expect(prompt).toContain("2024-12-31");
+		expect(prompt).toContain("2025-03-21");
+		expect(prompt).toContain("CALL A TOOL");
 	});
 
 	test("reflexionCritiquePrompt contains all inputs", () => {

@@ -1,5 +1,5 @@
-import { getModel } from "@luna/ai";
 import { factExtractionPrompt } from "@luna/prompts";
+import type { LanguageModel } from "ai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ConversationMessage, Memory } from "./types.ts";
@@ -14,11 +14,14 @@ const extractedFactSchema = z.object({
 	),
 });
 
-export async function extractFacts(messages: ConversationMessage[]): Promise<Memory[]> {
+export async function extractFacts(
+	messages: ConversationMessage[],
+	model: LanguageModel,
+): Promise<Memory[]> {
 	const conversationText = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
 
 	const { object } = await generateObject({
-		model: getModel(),
+		model,
 		schema: extractedFactSchema,
 		prompt: factExtractionPrompt(conversationText),
 	});

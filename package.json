@@ -11,7 +11,7 @@
 		"check": "biome check --write .",
 		"lint": "biome check .",
 		"format": "biome format --write .",
-		"typecheck": "bunx tsc --noEmit --project packages/env/tsconfig.json && bunx tsc --noEmit --project packages/guard/tsconfig.json && bunx tsc --noEmit --project packages/ai/tsconfig.json && bunx tsc --noEmit --project packages/prompts/tsconfig.json && bunx tsc --noEmit --project packages/db/tsconfig.json && bunx tsc --noEmit --project packages/knowledge/tsconfig.json && bunx tsc --noEmit --project packages/rlm/tsconfig.json && bunx tsc --noEmit --project packages/memory/tsconfig.json && bunx tsc --noEmit --project packages/vision/tsconfig.json && bunx tsc --noEmit --project packages/tools/tsconfig.json && bunx tsc --noEmit --project packages/personalize/tsconfig.json",
+		"typecheck": "bunx tsc --noEmit --project packages/env/tsconfig.json && bunx tsc --noEmit --project packages/guard/tsconfig.json && bunx tsc --noEmit --project packages/ai/tsconfig.json && bunx tsc --noEmit --project packages/prompts/tsconfig.json && bunx tsc --noEmit --project packages/db/tsconfig.json && bunx tsc --noEmit --project packages/knowledge/tsconfig.json && bunx tsc --noEmit --project packages/rlm/tsconfig.json && bunx tsc --noEmit --project packages/memory/tsconfig.json && bunx tsc --noEmit --project packages/vision/tsconfig.json && bunx tsc --noEmit --project packages/tools/tsconfig.json && bunx tsc --noEmit --project packages/personalize/tsconfig.json && bunx tsc --noEmit --project apps/agent/tsconfig.json",
 		"knowledge:ingest": "bun run packages/knowledge/scripts/ingest.ts",
 		"knowledge:query": "bun run packages/knowledge/scripts/query.ts",
 		"knowledge:stats": "bun run packages/knowledge/scripts/stats.ts",
@@ -20,7 +20,8 @@
 		"knowledge:export": "bun run packages/knowledge/scripts/export.ts",
 		"knowledge:import": "bun run packages/knowledge/scripts/import.ts",
 		"knowledge:setup": "docker compose up -d && bun run packages/knowledge/scripts/init-schema.ts",
-		"knowledge:test": "bun test packages/knowledge/"
+		"knowledge:test": "bun test packages/knowledge/",
+		"agent": "bun run apps/agent/src/index.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.8",

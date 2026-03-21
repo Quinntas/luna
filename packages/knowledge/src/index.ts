@@ -1,4 +1,4 @@
-export { createModel, getModel } from "@luna/ai";
+export { createModel } from "@luna/ai";
 export type { LanguageModel } from "ai";
 export { normalizeRelationType } from "./canonicalize/resolver.ts";
 export { extractFromText } from "./extract/extractor.ts";

@@ -1,12 +1,10 @@
 import {
 	clearTools as dbClearTools,
-	getTool as dbGetTool,
 	listTools as dbListTools,
 	registerTool as dbRegisterTool,
 	searchTools as dbSearchTools,
 	unregisterTool as dbUnregisterTool,
 } from "@luna/db";
-import type { z } from "zod";
 import type { ToolDefinition } from "./types.ts";
 
 const executors = new Map<string, ToolDefinition>();

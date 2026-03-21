@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { neo4jClient } from "@luna/knowledge";
 import { formatMemoriesForContext, retrieveRelevant } from "./retrieve.ts";
 import {
 	consolidateMemories,
@@ -30,177 +31,215 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 	};
 }
 
-function clearAllMemories() {
-	for (const m of getAllMemories()) {
-		deleteMemory(m.id);
+async function clearAllMemories() {
+	const driver = neo4jClient();
+	const session = driver.session();
+	try {
+		await session.executeWrite((tx) => tx.run(`MATCH (m:Memory) DETACH DELETE m`));
+	} finally {
+		await session.close();
 	}
 }
 
-beforeEach(() => {
-	clearAllMemories();
+beforeEach(async () => {
+	await clearAllMemories();
+});
+
+afterAll(async () => {
+	await clearAllMemories();
+	// Close neo4j driver
+	await import("@luna/knowledge").then((m) => m.closeDriver());
 });
 
 describe("storeMemory", () => {
-	test("stores and retrieves by ID", () => {
+	test("stores and retrieves by ID", async () => {
 		const mem = makeMemory({ id: "test-1", content: "Hello" });
-		storeMemory(mem);
-		expect(getMemory("test-1")?.content).toBe("Hello");
+		await storeMemory(mem);
+		const retrieved = await getMemory("test-1");
+		expect(retrieved?.content).toBe("Hello");
 	});
 
-	test("increments access count on get", () => {
-		const mem = makeMemory({ id: "test-2", accessCount: 0 });
-		storeMemory(mem);
-		getMemory("test-2");
-		getMemory("test-2");
-		const retrieved = getMemory("test-2");
-		// 2 gets before this + 1 in the expect = 3 accesses total
-		expect(retrieved?.accessCount).toBe(3);
+	test("updates access count and time on retrieval", async () => {
+		const mem = makeMemory({ id: "test-2" });
+		await storeMemory(mem);
+		const initial = await getMemory("test-2");
+		expect(initial?.accessCount).toBe(1);
+
+		const second = await getMemory("test-2");
+		expect(second?.accessCount).toBe(2);
+		expect(new Date(second!.lastAccessedAt).getTime()).toBeGreaterThanOrEqual(
+			new Date(initial!.lastAccessedAt).getTime(),
+		);
 	});
 
-	test("returns undefined for missing ID", () => {
-		expect(getMemory("missing")).toBeUndefined();
-	});
-});
+	test("auto-computes expiresAt for working memory", async () => {
+		const mem = makeMemory({ id: "test-3", tier: "working", expiresAt: null });
+		await storeMemory(mem);
+		const retrieved = await getMemory("test-3");
+		expect(retrieved?.expiresAt).not.toBeNull();
 
-describe("storeMemories", () => {
-	test("stores multiple memories", () => {
-		storeMemories([makeMemory({ id: "m1" }), makeMemory({ id: "m2" })]);
-		expect(getAllMemories()).toHaveLength(2);
+		const createdAt = new Date(retrieved!.createdAt).getTime();
+		const expiresAt = new Date(retrieved!.expiresAt!).getTime();
+		expect(expiresAt - createdAt).toBe(24 * 60 * 60 * 1000); // 1 day
 	});
 });
 
 describe("deleteMemory", () => {
-	test("deletes existing memory", () => {
-		storeMemory(makeMemory({ id: "del-1" }));
-		expect(deleteMemory("del-1")).toBe(true);
-		expect(getMemory("del-1")).toBeUndefined();
+	test("deletes memory", async () => {
+		await storeMemory(makeMemory({ id: "del-1" }));
+		expect(await getMemory("del-1")).toBeDefined();
+
+		const deleted = await deleteMemory("del-1");
+		expect(deleted).toBe(true);
+		expect(await getMemory("del-1")).toBeUndefined();
 	});
 
-	test("returns false for missing", () => {
-		expect(deleteMemory("missing")).toBe(false);
-	});
-});
-
-describe("getMemoriesByTier", () => {
-	test("filters by tier", () => {
-		storeMemories([
-			makeMemory({ id: "w1", tier: "working" }),
-			makeMemory({ id: "s1", tier: "short_term" }),
-			makeMemory({ id: "l1", tier: "long_term" }),
-		]);
-		expect(getMemoriesByTier("short_term")).toHaveLength(1);
-		expect(getMemoriesByTier("short_term")[0]?.id).toBe("s1");
+	test("returns false if memory does not exist", async () => {
+		expect(await deleteMemory("missing")).toBe(false);
 	});
 });
 
-describe("getMemoriesByTag", () => {
-	test("filters by tag", () => {
-		storeMemories([
-			makeMemory({ id: "t1", tags: ["work", "urgent"] }),
-			makeMemory({ id: "t2", tags: ["personal"] }),
+describe("getMemoriesByTier & Tag", () => {
+	test("filters by tier", async () => {
+		await storeMemories([
+			makeMemory({ id: "t1", tier: "working" }),
+			makeMemory({ id: "t2", tier: "short_term" }),
+			makeMemory({ id: "t3", tier: "working" }),
 		]);
-		expect(getMemoriesByTag("work")).toHaveLength(1);
-		expect(getMemoriesByTag("work")[0]?.id).toBe("t1");
+
+		const working = await getMemoriesByTier("working");
+		expect(working.length).toBe(2);
+		expect(working.map((m) => m.id).sort()).toEqual(["t1", "t3"]);
+	});
+
+	test("filters by tag", async () => {
+		await storeMemories([
+			makeMemory({ id: "tag1", tags: ["a", "b"] }),
+			makeMemory({ id: "tag2", tags: ["b", "c"] }),
+			makeMemory({ id: "tag3", tags: ["d"] }),
+		]);
+
+		const bTags = await getMemoriesByTag("b");
+		expect(bTags.length).toBe(2);
+		expect(bTags.map((m) => m.id).sort()).toEqual(["tag1", "tag2"]);
 	});
 });
 
-describe("consolidateMemories", () => {
-	test("merges duplicate content", () => {
-		storeMemories([
-			makeMemory({ id: "c1", content: "Alice works at Google", importance: 0.5 }),
-			makeMemory({ id: "c2", content: "Alice works at Google", importance: 0.9 }),
-		]);
-		const consolidated = consolidateMemories();
-		const matching = consolidated.filter((m) => m.content.startsWith("Alice works at Google"));
-		expect(matching).toHaveLength(1);
-		expect(matching[0]?.importance).toBe(0.9);
-	});
-
-	test("merges tags from duplicates", () => {
-		storeMemories([
-			makeMemory({ id: "ct1", content: "Same content", tags: ["a"] }),
-			makeMemory({ id: "ct2", content: "Same content", tags: ["b"] }),
-		]);
-		const consolidated = consolidateMemories();
-		const match = consolidated.find((m) => m.content === "Same content");
-		expect(match?.tags).toContain("a");
-		expect(match?.tags).toContain("b");
-	});
-});
-
-describe("promoteOldMemories", () => {
-	test("keeps working tier for young memories", () => {
-		const old = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-		storeMemory(
+describe("Lifecycle management", () => {
+	test("promoteOldMemories promotes frequently accessed working memories", async () => {
+		const oldDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+		await storeMemory(
 			makeMemory({
 				id: "promote-1",
 				tier: "working",
-				createdAt: old,
+				createdAt: oldDate,
+				// Give it a future expiration so it isn't cleaned up instantly
+				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
 				accessCount: 3,
 			}),
 		);
-		promoteOldMemories();
-		// 12h old, 3 accesses — not old enough for promotion (>24h required)
-		expect(getMemory("promote-1")?.tier).toBe("working");
-	});
-});
 
-describe("decayLowValueMemories", () => {
-	test("removes low-importance working memories", () => {
-		const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-		storeMemories([
+		await promoteOldMemories();
+		const mem = await getMemory("promote-1");
+		expect(mem?.tier).toBe("short_term");
+	});
+
+	test("decayLowValueMemories removes unaccessed working memories", async () => {
+		const oldDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+		await storeMemories([
 			makeMemory({
 				id: "decay-1",
 				tier: "working",
 				importance: 0.1,
-				lastAccessedAt: old,
+				lastAccessedAt: oldDate,
+				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
 			}),
 			makeMemory({
 				id: "keep-1",
 				tier: "working",
 				importance: 0.9,
 				lastAccessedAt: new Date().toISOString(),
+				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
 			}),
 		]);
-		const deleted = decayLowValueMemories(0.2);
+		const deleted = await decayLowValueMemories(0.2);
 		expect(deleted).toBe(1);
-		expect(getMemory("decay-1")).toBeUndefined();
-		expect(getMemory("keep-1")).toBeDefined();
+		expect(await getMemory("decay-1")).toBeUndefined();
+		expect(await getMemory("keep-1")).toBeDefined();
+	});
+
+	test("consolidateMemories merges exact duplicates", async () => {
+		await storeMemory(
+			makeMemory({
+				id: "dup-1",
+				content: "The user's favorite color is blue",
+				importance: 0.5,
+				tags: ["color"],
+				accessCount: 1,
+			}),
+		);
+
+		await storeMemory(
+			makeMemory({
+				id: "dup-2",
+				content: "The user's favorite color is blue",
+				importance: 0.8,
+				tags: ["user_preference"],
+				accessCount: 2,
+			}),
+		);
+
+		const consolidated = await consolidateMemories();
+		expect(consolidated.length).toBe(1);
+		expect(consolidated[0]?.importance).toBe(0.8);
+		expect(consolidated[0]?.tags.sort()).toEqual(["color", "user_preference"].sort());
+		expect(consolidated[0]?.accessCount).toBe(3);
+
+		// Ensure the DB only has one left
+		const all = await getAllMemories();
+		expect(all.length).toBe(1);
 	});
 });
 
 describe("retrieveRelevant", () => {
-	test("returns matching memories by content", () => {
-		storeMemories([
-			makeMemory({ id: "r1", content: "Alice works at Google as engineer" }),
-			makeMemory({ id: "r2", content: "Bob likes pizza" }),
+	test("scores by exact keyword matches", async () => {
+		await storeMemories([
+			makeMemory({ id: "r1", content: "Alice works at Google" }),
+			makeMemory({ id: "r2", content: "Bob works at Microsoft" }),
+			makeMemory({ id: "r3", content: "Alice lives in NY" }),
 		]);
-		const results = retrieveRelevant("Where does Alice work?");
-		expect(results.length).toBeGreaterThanOrEqual(1);
+
+		const results = await retrieveRelevant("Where does Alice work?");
+		expect(results.length).toBeGreaterThan(0);
 		expect(results[0]?.id).toBe("r1");
 	});
 
-	test("returns empty for no matches", () => {
-		storeMemory(makeMemory({ content: "Something unrelated" }));
-		const results = retrieveRelevant("quantum physics");
-		expect(results).toHaveLength(0);
+	test("scores by tags", async () => {
+		await storeMemories([
+			makeMemory({ id: "r4", content: "General info", tags: ["physics", "quantum"] }),
+			makeMemory({ content: "Something unrelated" }),
+		]);
+
+		const results = await retrieveRelevant("quantum physics");
+		expect(results.length).toBeGreaterThan(0);
+		expect(results[0]?.id).toBe("r4");
 	});
 });
 
 describe("formatMemoriesForContext", () => {
-	test("groups by tier", () => {
-		const memories: Memory[] = [
-			makeMemory({ id: "f1", tier: "long_term", content: "Long term fact" }),
-			makeMemory({ id: "f2", tier: "short_term", content: "Recent thing" }),
-			makeMemory({ id: "f3", tier: "working", content: "Current context" }),
-		];
-		const formatted = formatMemoriesForContext(memories);
+	test("formats by tier", () => {
+		const formatted = formatMemoriesForContext([
+			makeMemory({ content: "Long term fact", tier: "long_term" }),
+			makeMemory({ content: "Short term fact", tier: "short_term" }),
+			makeMemory({ content: "Working fact", tier: "working" }),
+		]);
+
 		expect(formatted).toContain("Long-term memories:");
+		expect(formatted).toContain("- Long term fact");
 		expect(formatted).toContain("Short-term memories:");
+		expect(formatted).toContain("- Short term fact");
 		expect(formatted).toContain("Recent context:");
-		expect(formatted).toContain("Long term fact");
-		expect(formatted).toContain("Recent thing");
-		expect(formatted).toContain("Current context");
+		expect(formatted).toContain("- Working fact");
 	});
 
 	test("returns empty string for empty array", () => {

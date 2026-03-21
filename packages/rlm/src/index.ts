@@ -1,5 +1,3 @@
-export type { AgentResult, AgentStep, Tool } from "./agent.ts";
-export { reactAgent } from "./agent.ts";
 export type { ReflexionAttempt, ReflexionResult } from "./reflexion.ts";
 export { reflexionAgent } from "./reflexion.ts";
 export { rlmComplete } from "./rlm.ts";
