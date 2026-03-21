@@ -1,44 +1,26 @@
+import { loadEnv, type Provider } from "@luna/env";
 import type { LanguageModel } from "ai";
 import { createGeminiModel } from "./providers/gemini.ts";
 import { createLiteLLMModel } from "./providers/litellm.ts";
-import { aiEnvSchema, type Provider } from "./types.ts";
 
 let _model: LanguageModel | null = null;
-
-function loadAiEnv() {
-	const cleaned = Object.fromEntries(
-		Object.entries(process.env).map(([k, v]) => [k, v === "" ? undefined : v]),
-	);
-
-	const result = aiEnvSchema.safeParse(cleaned);
-
-	if (!result.success) {
-		const messages = result.error.issues
-			.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
-			.join("\n");
-		throw new Error(`Invalid AI environment variables:\n${messages}`);
-	}
-
-	return result.data;
-}
 
 function buildModel(provider: Provider, model: string): LanguageModel {
 	switch (provider) {
 		case "gemini": {
-			const apiKey = process.env.GEMINI_API_KEY;
-			if (!apiKey) {
+			const env = loadEnv();
+			if (!env.GEMINI_API_KEY) {
 				throw new Error("GEMINI_API_KEY is required when AI_PROVIDER=gemini");
 			}
-			return createGeminiModel(model, apiKey);
+			return createGeminiModel(model, env.GEMINI_API_KEY);
 		}
 
 		case "litellm": {
-			const url = process.env.LITELLM_URL;
-			const key = process.env.LITELLM_KEY;
-			if (!url || !key) {
+			const env = loadEnv();
+			if (!env.LITELLM_URL || !env.LITELLM_KEY) {
 				throw new Error("LITELLM_URL and LITELLM_KEY are required when AI_PROVIDER=litellm");
 			}
-			return createLiteLLMModel(model, url, key);
+			return createLiteLLMModel(model, env.LITELLM_URL, env.LITELLM_KEY);
 		}
 
 		default:
@@ -48,7 +30,7 @@ function buildModel(provider: Provider, model: string): LanguageModel {
 
 export function getModel(): LanguageModel {
 	if (!_model) {
-		const env = loadAiEnv();
+		const env = loadEnv();
 		_model = buildModel(env.AI_PROVIDER, env.AI_MODEL);
 	}
 	return _model;

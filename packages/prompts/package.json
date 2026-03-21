@@ -1,5 +1,5 @@
 {
-	"name": "@luna/ai",
+	"name": "@luna/prompts",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
@@ -7,10 +7,7 @@
 		".": "./src/index.ts"
 	},
 	"dependencies": {
-		"@luna/env": "workspace:*",
-		"ai": "^4.3.0",
-		"@ai-sdk/google": "^1.2.0",
-		"@ai-sdk/openai-compatible": "^0.2.0"
+		"dedent": "^1.5.0"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

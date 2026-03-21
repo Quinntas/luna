@@ -1,3 +1,4 @@
+import { translationPrompt } from "@luna/prompts";
 import { generateText, type LanguageModel } from "ai";
 import { franc } from "franc-min";
 
@@ -40,13 +41,7 @@ export async function translateToEnglish(text: string, model: LanguageModel): Pr
 	const { text: translated } = await generateText({
 		model,
 		maxRetries: 3,
-		prompt: `Translate the following text to English. Rules:
-- Return ONLY the translation, no explanations or notes
-- Preserve all proper names, company names, dates, and technical terms exactly as they appear
-- Preserve the original meaning and structure
-
-Text to translate:
-${text}`,
+		prompt: translationPrompt(text),
 	});
 	return translated;
 }

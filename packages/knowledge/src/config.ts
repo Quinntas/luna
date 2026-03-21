@@ -1,28 +1,5 @@
 import { join } from "node:path";
-import { z } from "zod";
-
-const envSchema = z.object({
-	NEO4J_URI: z.string().url().default("bolt://localhost:7687"),
-	NEO4J_USER: z.string().default("neo4j"),
-	NEO4J_PASSWORD: z.string().min(1, "NEO4J_PASSWORD is required"),
-});
-
-function loadEnv() {
-	const cleaned = Object.fromEntries(
-		Object.entries(process.env).map(([k, v]) => [k, v === "" ? undefined : v]),
-	);
-
-	const result = envSchema.safeParse(cleaned);
-
-	if (!result.success) {
-		const messages = result.error.issues
-			.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`)
-			.join("\n");
-		throw new Error(`Invalid environment variables:\n${messages}`);
-	}
-
-	return result.data;
-}
+import { loadEnv } from "@luna/env";
 
 let _config: ReturnType<typeof buildConfig> | null = null;
 

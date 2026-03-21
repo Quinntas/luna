@@ -11,7 +11,7 @@
 		"check": "biome check --write .",
 		"lint": "biome check .",
 		"format": "biome format --write .",
-		"typecheck": "bunx tsc --noEmit --project packages/knowledge/tsconfig.json",
+		"typecheck": "bunx tsc --noEmit --project packages/knowledge/tsconfig.json && bunx tsc --noEmit --project packages/rlm/tsconfig.json",
 		"knowledge:ingest": "bun run packages/knowledge/scripts/ingest.ts",
 		"knowledge:query": "bun run packages/knowledge/scripts/query.ts",
 		"knowledge:stats": "bun run packages/knowledge/scripts/stats.ts",
