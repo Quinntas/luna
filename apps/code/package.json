@@ -14,6 +14,8 @@
 	"scripts": {
 		"typecheck": "bunx tsc --noEmit -p tsconfig.json",
 		"test": "bun test",
+		"cli": "bun run src/cli.ts",
+		"tui": "bun run src/tui.ts",
 		"example:basic": "bun run examples/basic.ts",
 		"example:tui": "bun run examples/tui.ts",
 		"example:sqlite": "bun run examples/sqlite.ts",

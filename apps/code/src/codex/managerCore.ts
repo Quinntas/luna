@@ -467,22 +467,15 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       this.writeMessage(context, { method: "initialized" });
       try {
-        const modelListResponse = await this.sendRequest(context, "model/list", {});
-        console.log("codex model/list response", modelListResponse);
-      } catch (error) {
-        console.log("codex model/list failed", error);
+        await this.sendRequest(context, "model/list", {});
+      } catch {
+        // non-fatal
       }
       try {
         const accountReadResponse = await this.sendRequest(context, "account/read", {});
-        console.log("codex account/read response", accountReadResponse);
         context.account = readCodexAccountSnapshot(accountReadResponse);
-        console.log("codex subscription status", {
-          type: context.account.type,
-          planType: context.account.planType,
-          sparkEnabled: context.account.sparkEnabled,
-        });
-      } catch (error) {
-        console.log("codex account/read failed", error);
+      } catch {
+        // non-fatal
       }
 
       const normalizedModel = resolveCodexModelForAccount(
