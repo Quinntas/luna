@@ -4,7 +4,7 @@ import { SLASH_COMMANDS } from "./commands.ts";
 import { setActiveDialog, updateReasoningOptions } from "./dialogs.ts";
 import { getSlashQuery } from "./format.ts";
 import { clearChatHistory } from "./messages.ts";
-import { REASONING_EFFORTS, SCROLL_STEP, textDecoder } from "./theme.ts";
+import { env, REASONING_EFFORTS, SCROLL_STEP, textDecoder } from "./theme.ts";
 import type { SlashCommand, TuiRefs, TuiState } from "./types.ts";
 
 export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
@@ -14,28 +14,38 @@ export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
 		state.commandSelectionIdx = 0;
 		refs.commandMenu.visible = false;
 		refs.commandMenuText.content = "";
+		refs.metaText.visible = true;
 		return;
 	}
 
 	const normalizedQuery = query.toLowerCase();
-	state.commandMatches = SLASH_COMMANDS.filter((command) =>
+	const hasUserMessages = state.history.some((h) => h.role === "user");
+
+	const availableCommands = SLASH_COMMANDS.filter((command) => {
+		if (command.action === "mode" && hasUserMessages) {
+			return false;
+		}
+		return true;
+	});
+
+	state.commandMatches = availableCommands.filter((command) =>
 		command.name.slice(1).startsWith(normalizedQuery),
 	);
-	if (state.commandMatches.length === 0) {
-		state.commandSelectionIdx = 0;
-		refs.commandMenu.visible = false;
-		refs.commandMenuText.content = "";
-		return;
-	}
 
-	state.commandSelectionIdx = Math.min(state.commandSelectionIdx, state.commandMatches.length - 1);
+	state.commandSelectionIdx = Math.max(0, Math.min(state.commandSelectionIdx, state.commandMatches.length - 1));
 	refs.commandMenu.visible = true;
-	refs.commandMenuText.content = state.commandMatches
-		.map((command, idx) => {
-			const selected = idx === state.commandSelectionIdx;
-			return `${selected ? "›" : " "} ${command.name}\n  ${command.description}`;
+	refs.metaText.visible = false;
+
+	const maxLen = Math.max(...availableCommands.map((c) => c.name.length));
+	refs.commandMenuText.content = availableCommands
+		.map((command) => {
+			if (!state.commandMatches.includes(command)) {
+				return "";
+			}
+			const selected = command === state.commandMatches[state.commandSelectionIdx];
+			return `${selected ? "›" : " "} ${command.name.padEnd(maxLen)}  ${command.description}`;
 		})
-		.join("\n\n");
+		.join("\n");
 }
 
 export function applySelectedCommand(state: TuiState, refs: TuiRefs): SlashCommand | null {
@@ -48,13 +58,29 @@ export function applySelectedCommand(state: TuiState, refs: TuiRefs): SlashComma
 	return selected;
 }
 
-export function runSlashCommand(command: SlashCommand, state: TuiState, refs: TuiRefs): boolean {
+export function runSlashCommand(
+	command: SlashCommand,
+	state: TuiState,
+	refs: TuiRefs,
+	updateMeta: (model: string, mode: string) => void,
+): boolean {
 	if (command.action === "hotkeys") {
 		setActiveDialog(state, refs, "hotkeys");
 		return true;
 	}
 	if (command.action === "reasoning") {
 		setActiveDialog(state, refs, "reasoning");
+		return true;
+	}
+	if (command.action === "mode") {
+		const userHasMessages = state.history.some((h) => h.role === "user");
+		if (userHasMessages) {
+			refs.statusText.content = "Cannot change mode after messages sent";
+			return true;
+		}
+		state.worktreeMode = !state.worktreeMode;
+		const modeLabel = state.worktreeMode ? "worktree" : "repo";
+		updateMeta(env.model, modeLabel);
 		return true;
 	}
 	if (command.action === "clear") {
@@ -80,7 +106,7 @@ export function wireInput(options: {
 		}
 		if (refs.commandMenu.visible) {
 			const selected = applySelectedCommand(state, refs);
-			if (selected && text === selected.name) {
+			if (selected) {
 				refs.input.clear();
 				updateCommandMenu(state, refs);
 				void sendMessage(selected.name);
@@ -94,6 +120,9 @@ export function wireInput(options: {
 
 	refs.input.onContentChange = () => {
 		updateCommandMenu(state, refs);
+		const lineCount = (refs.input.plainText.match(/\n/g) || []).length + 1;
+		const newHeight = Math.min(Math.max(lineCount + 1, 4), 6);
+		refs.inputBox.height = newHeight;
 	};
 
 	refs.renderer.keyInput.on("paste", (event) => {
@@ -137,21 +166,60 @@ export function wireInput(options: {
 
 		if (refs.commandMenu.visible && state.activeDialog === null) {
 			if (event.name === "up" || event.name === "k") {
-				state.commandSelectionIdx =
-					(state.commandSelectionIdx - 1 + state.commandMatches.length) %
-					state.commandMatches.length;
-				updateCommandMenu(state, refs);
+				if (state.commandMatches.length > 0) {
+					state.commandSelectionIdx =
+						(state.commandSelectionIdx - 1 + state.commandMatches.length) %
+						state.commandMatches.length;
+					updateCommandMenu(state, refs);
+				}
 				event.stopPropagation();
 				return;
 			}
 			if (event.name === "down" || event.name === "j") {
-				state.commandSelectionIdx = (state.commandSelectionIdx + 1) % state.commandMatches.length;
-				updateCommandMenu(state, refs);
+				if (state.commandMatches.length > 0) {
+					state.commandSelectionIdx = (state.commandSelectionIdx + 1) % state.commandMatches.length;
+					updateCommandMenu(state, refs);
+				}
 				event.stopPropagation();
 				return;
 			}
 			if (event.name === "tab") {
-				applySelectedCommand(state, refs);
+				const selected = applySelectedCommand(state, refs);
+				if (selected) {
+					refs.input.clear();
+					updateCommandMenu(state, refs);
+					void sendMessage(selected.name);
+				}
+				event.stopPropagation();
+				return;
+			}
+		}
+
+		if (!refs.commandMenu.visible && state.activeDialog === null && state.inputEnabled) {
+			const userMessages = state.history.filter((h) => h.role === "user");
+			if (event.name === "up") {
+				if (state.historyIndex < userMessages.length - 1) {
+					state.historyIndex++;
+					const historyItem = userMessages[state.historyIndex];
+					if (historyItem !== undefined) {
+						refs.input.setText(historyItem.content);
+					}
+				}
+				event.stopPropagation();
+				return;
+			}
+			if (event.name === "down") {
+				if (state.historyIndex > -1) {
+					state.historyIndex--;
+					if (state.historyIndex === -1) {
+						refs.input.clear();
+					} else {
+						const historyItem = userMessages[state.historyIndex];
+						if (historyItem !== undefined) {
+							refs.input.setText(historyItem.content);
+						}
+					}
+				}
 				event.stopPropagation();
 				return;
 			}
@@ -164,9 +232,7 @@ export function wireInput(options: {
 			(event.meta && event.name === "i") ||
 			(event.option && event.name === "c")
 		) {
-			const selectedText = refs.renderer.getSelection()?.getSelectedText().trim() ?? "";
-			const fallbackText = refs.input.focused ? refs.input.plainText.trim() : "";
-			const textToCopy = selectedText || fallbackText;
+			const textToCopy = refs.input.getSelectedText();
 			if (textToCopy) {
 				refs.renderer.copyToClipboardOSC52(textToCopy);
 			}

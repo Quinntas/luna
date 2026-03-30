@@ -1,16 +1,16 @@
 export class CodexRuntimeError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "CodexRuntimeError";
-  }
+	constructor(message: string, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "CodexRuntimeError";
+	}
 }
 
 export class CodexRequestError extends CodexRuntimeError {
-  readonly method: string;
+	readonly method: string;
 
-  constructor(method: string, message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "CodexRequestError";
-    this.method = method;
-  }
+	constructor(method: string, message: string, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "CodexRequestError";
+		this.method = method;
+	}
 }

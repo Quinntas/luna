@@ -1,4 +1,6 @@
-export { main, runTui } from "./tui/index.ts";
+import { main, runTui } from "./tui/index.ts";
+
+export { main, runTui };
 
 if (import.meta.main) {
 	main().catch((error) => {
@@ -6,5 +8,3 @@ if (import.meta.main) {
 		process.exitCode = 1;
 	});
 }
-
-import { main } from "./tui/index.ts";

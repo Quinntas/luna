@@ -15,7 +15,7 @@ export type ActiveDialog = "reasoning" | "hotkeys" | null;
 export interface SlashCommand {
 	readonly name: string;
 	readonly description: string;
-	readonly action: "hotkeys" | "reasoning" | "clear";
+	readonly action: "hotkeys" | "reasoning" | "mode" | "clear";
 }
 
 export interface TuiRefs {
@@ -25,11 +25,17 @@ export interface TuiRefs {
 	readonly commandMenu: BoxRenderable;
 	readonly commandMenuText: TextRenderable;
 	readonly input: TextareaRenderable;
+	readonly inputBox: BoxRenderable;
 	readonly statusText: TextRenderable;
 	readonly tokenText: TextRenderable;
 	readonly reasoningDialog: BoxRenderable;
 	readonly reasoningOptions: TextRenderable;
 	readonly hotkeysDialog: BoxRenderable;
+}
+
+export interface HistoryEntry {
+	role: "user" | "assistant";
+	content: string;
 }
 
 export interface TuiState {
@@ -45,4 +51,7 @@ export interface TuiState {
 	reasoningEffortIdx: number;
 	commandMatches: ReadonlyArray<SlashCommand>;
 	commandSelectionIdx: number;
+	worktreeMode: boolean;
+	history: HistoryEntry[];
+	historyIndex: number;
 }

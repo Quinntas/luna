@@ -22,6 +22,7 @@
 		"build:tui": "bun build src/bin/luna-tui.ts --target bun --outdir dist",
 		"build:tui:compile": "bun build src/bin/luna-tui.ts --compile --outfile dist/luna-tui",
 		"install:tui": "bun run build:tui:compile && bun run scripts/install-tui.ts",
+		"db:check": "bun run scripts/check-db.ts",
 		"example:basic": "bun run examples/basic.ts",
 		"example:tui": "bun run examples/tui.ts",
 		"example:sqlite": "bun run examples/sqlite.ts",

@@ -3,6 +3,7 @@ import type { SlashCommand } from "./types.ts";
 export const SLASH_COMMANDS: ReadonlyArray<SlashCommand> = [
 	{ name: "/hotkeys", description: "Open the hotkeys dialog", action: "hotkeys" },
 	{ name: "/reasoning", description: "Open the reasoning effort dialog", action: "reasoning" },
+	{ name: "/mode", description: "Toggle worktree/repo-root mode", action: "mode" },
 	{ name: "/clear", description: "Clear the chat history", action: "clear" },
 ];
 
@@ -20,7 +21,6 @@ const HOTKEY_GROUPS = [
 		entries: [
 			["Ctrl+R", "Open reasoning effort dialog"],
 			["Ctrl+/", "Open hotkeys dialog"],
-			["/hotkeys", "Open hotkeys dialog"],
 			["Esc", "Close active dialog or menu"],
 		],
 	},

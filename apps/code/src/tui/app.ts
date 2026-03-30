@@ -15,7 +15,7 @@ import {
 	wireRuntime,
 } from "./runtime.ts";
 import { env, theme } from "./theme.ts";
-import type { TuiState } from "./types.ts";
+import type { HistoryEntry, TuiState } from "./types.ts";
 
 export async function runTui(opts: { resume: boolean; threadId?: string }): Promise<void> {
 	const renderer = await createCliRenderer({
@@ -37,10 +37,20 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		reasoningEffortIdx: 0,
 		commandMatches: [],
 		commandSelectionIdx: 0,
+		worktreeMode: false,
+		history: [],
+		historyIndex: -1,
 	};
 
 	const runtime = createRuntime(env.dbPath);
-	wireRuntime(runtime, state, refs, env.model);
+
+	async function saveHistory(): Promise<void> {
+		if (thread) {
+			await runtime.updateHistory(thread.id, state.history);
+		}
+	}
+
+	wireRuntime(runtime, state, refs, env.model, saveHistory);
 	updateReasoningOptions(state, refs);
 	updateMetaText(state, refs, env.model);
 	updateTokenText(state, refs);
@@ -48,17 +58,44 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 
 	let thread: Awaited<ReturnType<typeof runtime.startThread>> | undefined;
 
+	async function ensureThread(): Promise<void> {
+		if (thread) return;
+		const threadId = `thread-${Date.now()}`;
+		const worktreeMode = state.worktreeMode ? "reuse-or-create" : "repo-root";
+		thread = await runtime.startThread({
+			threadId,
+			title: threadId,
+			repoRoot: env.repoRoot,
+			worktree: { mode: worktreeMode },
+			codex: {
+				model: env.model,
+				runtimeMode: "full-access",
+				binaryPath: env.binaryPath,
+				homePath: env.homePath,
+			},
+		});
+		const modeLabel = state.worktreeMode ? "worktree" : "repo";
+		updateMetaText(state, refs, env.model, modeLabel);
+	}
+
 	async function sendMessage(text: string): Promise<void> {
-		if (!thread || !state.inputEnabled) return;
+		if (!state.inputEnabled) return;
 		const slashCommand = SLASH_COMMANDS.find((command) => command.name === text);
 		if (slashCommand) {
-			runSlashCommand(slashCommand, state, refs);
+			runSlashCommand(slashCommand, state, refs, (model, mode) => {
+				updateMetaText(state, refs, model, mode);
+			});
 			return;
 		}
+		await ensureThread();
+		if (!thread) return;
 		state.inputEnabled = false;
 		refs.scrollBox.stickyScroll = true;
 		addUserMessage(refs, text);
 		state.currentResponse = addAgentMessage(refs);
+		const userEntry: HistoryEntry = { role: "user", content: text };
+		state.history = [userEntry, ...state.history];
+		state.historyIndex = -1;
 		startSpinner(state, refs, "thinking", env.model);
 		refs.statusText.fg = theme.muted;
 		try {
@@ -81,10 +118,9 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		sendMessage,
 	});
 
-	startSpinner(state, refs, "connecting", env.model);
-
-	try {
-		if (opts.resume) {
+	if (opts.resume) {
+		startSpinner(state, refs, "connecting", env.model);
+		try {
 			const threads = await runtime.listThreads();
 			const target = opts.threadId
 				? threads.find((item) => item.id === opts.threadId)
@@ -93,30 +129,34 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 				throw new Error("No thread to resume");
 			}
 			thread = await runtime.resumeThread(target.id);
-		} else {
-			const threadId = `thread-${Date.now()}`;
-			thread = await runtime.startThread({
-				threadId,
-				title: threadId,
-				repoRoot: env.repoRoot,
-				worktree: { mode: "repo-root" },
-				codex: {
-					model: env.model,
-					runtimeMode: "full-access",
-					binaryPath: env.binaryPath,
-					homePath: env.homePath,
-				},
-			});
+			const threadRecord = await runtime.getThread(thread.id);
+			if (threadRecord) {
+				if (threadRecord.history && threadRecord.history.length > 0) {
+					state.history = [...threadRecord.history];
+				} else if ((threadRecord as unknown as { inputHistory?: string[] }).inputHistory) {
+					const oldInputHistory = (threadRecord as unknown as { inputHistory: string[] })
+						.inputHistory;
+					state.history = oldInputHistory.map((content) => ({
+						role: "user" as const,
+						content,
+					}));
+				}
+				state.worktreeMode = threadRecord.workspace.mode === "worktree";
+			}
+			const modeLabel = state.worktreeMode ? "worktree" : "repo";
+			updateMetaText(state, refs, env.model, modeLabel);
+			stopSpinner(state, refs);
+			refs.statusText.fg = theme.muted;
+			state.inputEnabled = true;
+			refs.input.focus();
+		} catch (error) {
+			stopSpinner(state, refs);
+			refs.statusText.fg = theme.red;
+			refs.metaText.content = `${error instanceof Error ? error.message : String(error)}`;
 		}
-		updateMetaText(state, refs, env.model);
-		stopSpinner(state, refs);
-		refs.statusText.fg = theme.muted;
+	} else {
 		state.inputEnabled = true;
 		refs.input.focus();
-	} catch (error) {
-		stopSpinner(state, refs);
-		refs.statusText.fg = theme.red;
-		refs.metaText.content = `  luna  ·  ${error instanceof Error ? error.message : String(error)}`;
 	}
 }
 

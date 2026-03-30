@@ -99,13 +99,25 @@ async function runSession(opts: { resume: boolean; threadId?: string }): Promise
 
 	const unsubscribe = runtime.on((event) => {
 		if (event.type === "content.delta") {
-			if (firstDelta) { spinner.stop(); firstDelta = false; }
+			if (firstDelta) {
+				spinner.stop();
+				firstDelta = false;
+			}
 			process.stdout.write(event.payload.delta);
 			return;
 		}
-		if (event.type === "turn.completed") { finishTurn("\n"); return; }
-		if (event.type === "turn.aborted") { finishTurn(`\n${c.yellow(`⚠ ${event.payload.reason}`)}\n`); return; }
-		if (event.type === "session.error") { finishTurn(`\n${c.red(`✖ ${event.payload.message}`)}\n`); return; }
+		if (event.type === "turn.completed") {
+			finishTurn("\n");
+			return;
+		}
+		if (event.type === "turn.aborted") {
+			finishTurn(`\n${c.yellow(`⚠ ${event.payload.reason}`)}\n`);
+			return;
+		}
+		if (event.type === "session.error") {
+			finishTurn(`\n${c.red(`✖ ${event.payload.message}`)}\n`);
+			return;
+		}
 		if (event.type === "session.exited") {
 			const detail = [event.payload.exitKind, event.payload.reason].filter(Boolean).join(" — ");
 			finishTurn(`\n${c.dim(`session exited${detail ? `: ${detail}` : ""}`)}\n`);
@@ -125,7 +137,9 @@ async function runSession(opts: { resume: boolean; threadId?: string }): Promise
 				const latest = threads.at(-1);
 				if (!latest) {
 					spinner.stop();
-					process.stderr.write(`${c.red("✖ No threads to resume. Start a new session instead.")}\n`);
+					process.stderr.write(
+						`${c.red("✖ No threads to resume. Start a new session instead.")}\n`,
+					);
 					process.exitCode = 1;
 					runtime.dispose();
 					return;
@@ -149,7 +163,9 @@ async function runSession(opts: { resume: boolean; threadId?: string }): Promise
 		}
 	} catch (error) {
 		spinner.stop();
-		process.stderr.write(`${c.red(`✖ ${error instanceof Error ? error.message : String(error)}`)}\n`);
+		process.stderr.write(
+			`${c.red(`✖ ${error instanceof Error ? error.message : String(error)}`)}\n`,
+		);
 		process.exitCode = 1;
 		runtime.dispose();
 		return;
@@ -188,7 +204,9 @@ async function runSession(opts: { resume: boolean; threadId?: string }): Promise
 		}
 
 		firstDelta = true;
-		turnDone = new Promise<void>((resolve) => { resolveTurn = resolve; });
+		turnDone = new Promise<void>((resolve) => {
+			resolveTurn = resolve;
+		});
 
 		spinner.start("thinking…");
 
@@ -201,7 +219,9 @@ async function runSession(opts: { resume: boolean; threadId?: string }): Promise
 			});
 		} catch (error) {
 			spinner.stop();
-			process.stdout.write(`${c.red(`✖ ${error instanceof Error ? error.message : String(error)}`)}\n`);
+			process.stdout.write(
+				`${c.red(`✖ ${error instanceof Error ? error.message : String(error)}`)}\n`,
+			);
 			resolveTurn?.();
 		}
 

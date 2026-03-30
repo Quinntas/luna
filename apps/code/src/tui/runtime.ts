@@ -8,13 +8,16 @@ export function createRuntime(dbPath: string | undefined): LunaRuntime {
 	return new LunaRuntime({ store: new SqliteThreadStore({ dbPath }) });
 }
 
-export function updateMetaText(state: TuiState, refs: TuiRefs, model: string): void {
+export function updateMetaText(state: TuiState, refs: TuiRefs, model: string, mode?: string): void {
 	const elapsed =
 		state.activeTurnStartedAtMs !== null
 			? Date.now() - state.activeTurnStartedAtMs
 			: state.lastTurnDurationMs;
+	const modeStr = mode ? ` · ${mode}` : "";
 	refs.metaText.content =
-		elapsed === null ? `  ${model}` : `  ${model}  ·  ${formatDuration(elapsed)}`;
+		elapsed === null
+			? `${model.toUpperCase()}${modeStr.toUpperCase()}`
+			: `${model.toUpperCase()}${modeStr.toUpperCase()} · ${formatDuration(elapsed)}`;
 }
 
 export function updateTokenText(state: TuiState, refs: TuiRefs): void {
@@ -66,6 +69,7 @@ export function wireRuntime(
 	state: TuiState,
 	refs: TuiRefs,
 	model: string,
+	saveHistory: () => Promise<void>,
 ): void {
 	runtime.on((event) => {
 		if (event.type === "turn.started") {
@@ -84,7 +88,15 @@ export function wireRuntime(
 			return;
 		}
 		if (event.type === "turn.completed") {
+			const rawContent = state.currentResponse?.content ?? "";
+			const formattedContent = formatStructuredMarkdown(rawContent);
+			const assistantEntry = { role: "assistant" as const, content: formattedContent };
+			state.history = [assistantEntry, ...state.history];
+			if (state.currentResponse) {
+				state.currentResponse.content = formattedContent;
+			}
 			finishTurn(state, refs, model);
+			void saveHistory();
 			return;
 		}
 		if (event.type === "turn.aborted") {

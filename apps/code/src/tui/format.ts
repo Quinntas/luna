@@ -46,7 +46,7 @@ export function formatCompactNumber(value: number): string {
 
 export function formatTokenUsage(usage: ThreadTokenUsageSnapshot | null): string {
 	if (!usage) {
-		return "";
+		return "0 (0%)";
 	}
 	const used = usage.usedTokens;
 	const max = usage.maxTokens;
