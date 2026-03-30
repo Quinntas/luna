@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { closeDb } from "@luna/db";
 
 import type { LunaRuntimeEvent } from "../src/contracts/events";
 import type { CodexSessionRuntime, ThreadStore, WorktreeProvisioner } from "../src/contracts/ports";
@@ -13,7 +14,12 @@ import { SqliteThreadStore } from "../src/storage/sqliteThreadStore";
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-	await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+	await Promise.all(
+		tempDirs.splice(0).map(async (dir) => {
+			closeDb(path.join(dir, "luna.db"));
+			await rm(dir, { recursive: true, force: true });
+		}),
+	);
 });
 
 class FakeWorktree implements WorktreeProvisioner {
@@ -343,7 +349,7 @@ describe("LunaRuntime", () => {
 	it("resumes a stored provider thread id from SqliteThreadStore", async () => {
 		const dir = await mkdtemp(path.join(os.tmpdir(), "luna-runtime-"));
 		tempDirs.push(dir);
-		const store = new SqliteThreadStore({ filePath: path.join(dir, "threads.sqlite") });
+		const store = new SqliteThreadStore({ dbPath: path.join(dir, "luna.db") });
 		const codex = new FakeCodex();
 		const firstRuntime = new LunaRuntime({
 			store,
@@ -380,7 +386,7 @@ describe("LunaRuntime", () => {
 	it("persists pruned checkpoints across runtime restart", async () => {
 		const dir = await mkdtemp(path.join(os.tmpdir(), "luna-prune-"));
 		tempDirs.push(dir);
-		const store = new SqliteThreadStore({ filePath: path.join(dir, "threads.sqlite") });
+		const store = new SqliteThreadStore({ dbPath: path.join(dir, "luna.db") });
 		const checkpoints = new FakeCheckpointStore();
 		const runtime = new LunaRuntime({
 			store,
@@ -420,7 +426,7 @@ describe("LunaRuntime", () => {
 	it("persists deleted checkpoints across runtime restart", async () => {
 		const dir = await mkdtemp(path.join(os.tmpdir(), "luna-delete-checkpoints-"));
 		tempDirs.push(dir);
-		const store = new SqliteThreadStore({ filePath: path.join(dir, "threads.sqlite") });
+		const store = new SqliteThreadStore({ dbPath: path.join(dir, "luna.db") });
 		const checkpoints = new FakeCheckpointStore();
 		const runtime = new LunaRuntime({
 			store,

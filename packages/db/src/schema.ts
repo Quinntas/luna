@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const tools = sqliteTable("tools", {
 	name: text().primaryKey(),
@@ -25,4 +25,13 @@ export const ingestionLog = sqliteTable("ingestion_log", {
 	relationsCreated: integer("relations_created").notNull(),
 	durationMs: integer("duration_ms").notNull(),
 	createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export const threads = sqliteTable("threads", {
+	id: text().primaryKey(),
+	createdAt: text("created_at").notNull(),
+	updatedAt: text("updated_at").notNull(),
+	title: text().notNull(),
+	repoRoot: text("repo_root").notNull(),
+	dataJson: text("data_json", { mode: "json" }).$type<object>().notNull(),
 });

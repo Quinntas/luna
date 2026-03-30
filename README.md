@@ -126,6 +126,9 @@ bun run --cwd apps/code example:restore
 bun run --cwd apps/code example:cleanup
 ```
 
+`apps/code` thread state is stored in the shared SQLite database at `data/luna.db` by default.
+Set `LUNA_DB_PATH` if you want the whole repo to use a different SQLite file.
+
 ## Knowledge Graph Workflows
 
 Initialize Neo4j schema and start the local container:
@@ -246,6 +249,7 @@ bun test apps/code/test
 - SQLite database path defaults to `data/luna.db`
 - Neo4j stores entities, relations, provenance, and graph queries
 - local DB tables include:
+  - `threads`
   - `tools`
   - `user_preferences`
   - `ingestion_log`

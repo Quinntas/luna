@@ -31,6 +31,7 @@
     "apps/code": {
       "name": "@luna/code",
       "dependencies": {
+        "@luna/db": "workspace:*",
         "pino": "^9.9.0",
       },
       "devDependencies": {

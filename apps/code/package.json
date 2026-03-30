@@ -21,6 +21,7 @@
 		"example:cleanup": "bun run examples/cleanup.ts"
 	},
 	"dependencies": {
+		"@luna/db": "workspace:*",
 		"pino": "^9.9.0"
 	},
 	"devDependencies": {
