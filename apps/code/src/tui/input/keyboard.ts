@@ -1,5 +1,6 @@
 import type { KeyEvent } from "@opentui/core";
 import type { LunaRuntime } from "../../index.ts";
+import { runPrCommand } from "../commands/pr.ts";
 import type { DialogManager } from "../components/dialogs/index.ts";
 import { clearChatHistory } from "../components/Messages.ts";
 import { env, SCROLL_STEP } from "../config/index.ts";
@@ -71,6 +72,7 @@ export function runSlashCommand(
 	state: TuiState,
 	refs: TuiRefs,
 	dialogManager: DialogManager,
+	runtime: LunaRuntime,
 	updateMeta: (model: string, mode: string) => void,
 ): boolean {
 	if (command.action === "hotkeys") {
@@ -94,6 +96,10 @@ export function runSlashCommand(
 	}
 	if (command.action === "clear") {
 		clearChatHistory(refs);
+		return true;
+	}
+	if (command.action === "pr") {
+		void runPrCommand(state, refs, runtime);
 		return true;
 	}
 	return false;

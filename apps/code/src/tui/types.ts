@@ -16,7 +16,7 @@ export type ActiveDialog = "reasoning" | "hotkeys" | null;
 export interface SlashCommand {
 	readonly name: string;
 	readonly description: string;
-	readonly action: "hotkeys" | "reasoning" | "mode" | "clear";
+	readonly action: "hotkeys" | "reasoning" | "mode" | "clear" | "pr";
 }
 
 export interface TuiRefs {

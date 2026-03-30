@@ -6,6 +6,7 @@ export const SLASH_COMMANDS: ReadonlyArray<SlashCommand> = [
 	{ name: "/reasoning", description: "Open the reasoning effort dialog", action: "reasoning" },
 	{ name: "/mode", description: "Toggle worktree/repo-root mode", action: "mode" },
 	{ name: "/clear", description: "Clear the chat history", action: "clear" },
+	{ name: "/pr", description: "Create branch, commit and PR", action: "pr" },
 ];
 
 export { buildHotkeysText };

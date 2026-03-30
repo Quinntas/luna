@@ -68,7 +68,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		if (!state.inputEnabled) return;
 		const slashCommand = SLASH_COMMANDS.find((command) => command.name === text);
 		if (slashCommand) {
-			runSlashCommand(slashCommand, state, refs, dialogManager, (model, mode) => {
+			runSlashCommand(slashCommand, state, refs, dialogManager, runtime, (model, mode) => {
 				updateMetaText(state, refs, model, mode);
 			});
 			return;
