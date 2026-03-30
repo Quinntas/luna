@@ -1,21 +1,22 @@
 import { parseArgs } from "node:util";
 import { createCliRenderer } from "@opentui/core";
-import { SLASH_COMMANDS } from "./commands.ts";
-import { updateReasoningOptions } from "./dialogs.ts";
-import { runSlashCommand, updateCommandMenu, wireInput } from "./input.ts";
-import { createLayout } from "./layout.ts";
-import { addAgentMessage, addUserMessage } from "./messages.ts";
+import { createDialogManager } from "./components/dialogs/index.ts";
+import { createLayout } from "./components/Layout.ts";
+import { addAgentMessage, addUserMessage } from "./components/Messages.ts";
+import { env, theme } from "./config/index.ts";
+import { SLASH_COMMANDS } from "./input/commands.ts";
+import { runSlashCommand, updateCommandMenu, wireInput } from "./input/index.ts";
 import {
-	createRuntime,
 	finishTurn,
 	startSpinner,
 	stopSpinner,
 	updateMetaText,
 	updateTokenText,
 	wireRuntime,
-} from "./runtime.ts";
-import { env, theme } from "./theme.ts";
-import type { HistoryEntry, TuiState } from "./types.ts";
+} from "./runtime/events.ts";
+import { createRuntime } from "./runtime/factory.ts";
+import type { HistoryEntry } from "./types.ts";
+import { createInitialState } from "./types.ts";
 
 export async function runTui(opts: { resume: boolean; threadId?: string }): Promise<void> {
 	const renderer = await createCliRenderer({
@@ -24,23 +25,8 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		useMouse: true,
 	});
 	const refs = createLayout(renderer);
-	const state: TuiState = {
-		inputEnabled: false,
-		currentResponse: null,
-		spinnerTimer: undefined,
-		spinnerIdx: 0,
-		lastTurnDurationMs: null,
-		activeTurnStartedAtMs: null,
-		latestTokenUsage: null,
-		activeDialog: null,
-		reasoningEffort: "low",
-		reasoningEffortIdx: 0,
-		commandMatches: [],
-		commandSelectionIdx: 0,
-		worktreeMode: false,
-		history: [],
-		historyIndex: -1,
-	};
+	const state = createInitialState();
+	const dialogManager = createDialogManager(refs, state);
 
 	const runtime = createRuntime(env.dbPath);
 
@@ -51,7 +37,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 	}
 
 	wireRuntime(runtime, state, refs, env.model, saveHistory);
-	updateReasoningOptions(state, refs);
+	dialogManager.updateReasoning();
 	updateMetaText(state, refs, env.model);
 	updateTokenText(state, refs);
 	updateCommandMenu(state, refs);
@@ -82,7 +68,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		if (!state.inputEnabled) return;
 		const slashCommand = SLASH_COMMANDS.find((command) => command.name === text);
 		if (slashCommand) {
-			runSlashCommand(slashCommand, state, refs, (model, mode) => {
+			runSlashCommand(slashCommand, state, refs, dialogManager, (model, mode) => {
 				updateMetaText(state, refs, model, mode);
 			});
 			return;
@@ -116,6 +102,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		runtime,
 		getThread: () => thread,
 		sendMessage,
+		dialogManager,
 	});
 
 	if (opts.resume) {

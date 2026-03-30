@@ -1,12 +1,12 @@
 import { BoxRenderable, TextRenderable } from "@opentui/core";
-import { createMarkdownMessage } from "./layout.ts";
-import { theme } from "./theme.ts";
-import type { TuiRefs } from "./types.ts";
+import { theme } from "../config/index.ts";
+import type { TuiRefs } from "../types.ts";
+import { createMarkdownMessage } from "./Layout.ts";
 
 export function addUserMessage(refs: TuiRefs, text: string): void {
 	const wrapper = new BoxRenderable(refs.renderer, {
-    flexDirection: "column",
-    marginBottom: 1
+		flexDirection: "column",
+		marginBottom: 1,
 	});
 	const label = new TextRenderable(refs.renderer, {
 		content: "you",
@@ -25,7 +25,7 @@ export function addUserMessage(refs: TuiRefs, text: string): void {
 export function addAgentMessage(refs: TuiRefs) {
 	const wrapper = new BoxRenderable(refs.renderer, {
 		flexDirection: "column",
-    marginBottom: 1
+		marginBottom: 1,
 	});
 	const label = new TextRenderable(refs.renderer, {
 		content: "luna",

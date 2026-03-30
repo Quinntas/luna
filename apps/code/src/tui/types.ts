@@ -3,6 +3,7 @@ import type {
 	createCliRenderer,
 	MarkdownRenderable,
 	ScrollBoxRenderable,
+	SelectRenderable,
 	TextareaRenderable,
 	TextRenderable,
 } from "@opentui/core";
@@ -22,8 +23,8 @@ export interface TuiRefs {
 	readonly renderer: CliRenderer;
 	readonly scrollBox: ScrollBoxRenderable;
 	readonly metaText: TextRenderable;
-	readonly commandMenu: BoxRenderable;
-	readonly commandMenuText: TextRenderable;
+	readonly commandMenu: SelectRenderable;
+	readonly commandMenuText: TextRenderable | null;
 	readonly input: TextareaRenderable;
 	readonly inputBox: BoxRenderable;
 	readonly statusText: TextRenderable;
@@ -36,6 +37,26 @@ export interface TuiRefs {
 export interface HistoryEntry {
 	role: "user" | "assistant";
 	content: string;
+}
+
+export function createInitialState(): TuiState {
+	return {
+		inputEnabled: false,
+		currentResponse: null,
+		spinnerTimer: undefined,
+		spinnerIdx: 0,
+		lastTurnDurationMs: null,
+		activeTurnStartedAtMs: null,
+		latestTokenUsage: null,
+		activeDialog: null,
+		reasoningEffort: "low",
+		reasoningEffortIdx: 0,
+		commandMatches: [],
+		commandSelectionIdx: 0,
+		worktreeMode: false,
+		history: [],
+		historyIndex: -1,
+	};
 }
 
 export interface TuiState {

@@ -1,4 +1,4 @@
-import type { ThreadTokenUsageSnapshot } from "../codex/typesCore";
+import type { ThreadTokenUsageSnapshot } from "../../codex/typesCore";
 
 export function formatStructuredMarkdown(content: string): string {
 	const trimmed = content.trim();

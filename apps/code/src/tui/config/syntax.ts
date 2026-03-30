@@ -1,32 +1,5 @@
 import { RGBA, SyntaxStyle } from "@opentui/core";
 
-export const env = {
-	model: process.env.CODEX_MODEL ?? "gpt-5.4",
-	binaryPath: process.env.CODEX_BINARY_PATH,
-	homePath: process.env.CODEX_HOME,
-	dbPath: process.env.LUNA_DB_PATH,
-	repoRoot: process.env.LUNA_REPO_ROOT ?? process.cwd(),
-};
-
-export const theme = {
-	text: "#cdd6f4",
-	subtext: "#a6adc8",
-	muted: "#585b70",
-	surface: "#1e1e2e",
-	border: "#45475a",
-	mauve: "#cba6f7",
-	sky: "#89dceb",
-	red: "#f38ba8",
-	yellow: "#f9e2af",
-	green: "#a6e3a1",
-};
-
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-export const SCROLL_STEP = 3;
-export const textDecoder = new TextDecoder();
-export const REASONING_EFFORTS = ["low", "medium", "high"] as const;
-export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
-
 export function createSyntaxStyle(): SyntaxStyle {
 	return SyntaxStyle.fromStyles({
 		default: { fg: RGBA.fromHex("#cdd6f4") },

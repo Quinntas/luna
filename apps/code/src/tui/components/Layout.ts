@@ -2,46 +2,17 @@ import {
 	BoxRenderable,
 	MarkdownRenderable,
 	ScrollBoxRenderable,
+	SelectRenderable,
 	TextareaRenderable,
 	TextRenderable,
 } from "@opentui/core";
-import { buildHotkeysText } from "./commands.ts";
-import { createSyntaxStyle, env, theme } from "./theme.ts";
-import type { CliRenderer, TuiRefs } from "./types.ts";
-
-function createOverlayDialog(
-	renderer: CliRenderer,
-	opts: {
-		zIndex: number;
-		bg?: string;
-	},
-): { root: BoxRenderable; inner: BoxRenderable } {
-	const root = new BoxRenderable(renderer, {
-		position: "absolute",
-		alignItems: "center",
-		alignSelf: "center",
-		justifyContent: "center",
-		height: "100%",
-		width: "100%",
-		zIndex: opts.zIndex,
-		visible: false,
-	});
-
-	const inner = new BoxRenderable(renderer, {
-		backgroundColor: opts.bg,
-		border: true,
-		borderColor: theme.mauve,
-		flexDirection: "column",
-	});
-
-	root.add(inner);
-
-	return { root, inner };
-}
+import { createSyntaxStyle, env, theme } from "../config/index.ts";
+import { buildHotkeysText } from "../input/commands.ts";
+import type { CliRenderer, TuiRefs } from "../types.ts";
 
 export function createLayout(renderer: CliRenderer): TuiRefs {
 	const syntaxStyle = createSyntaxStyle();
-  renderer.root.flexDirection = "column";
+	renderer.root.flexDirection = "column";
 
 	const scrollBox = new ScrollBoxRenderable(renderer, {
 		flexGrow: 1,
@@ -52,28 +23,32 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 
 	const metaText = new TextRenderable(renderer, {
 		content: `${env.model}`,
-    fg: theme.muted,
-    marginLeft: 1,
-    marginTop: 1
+		fg: theme.muted,
+		marginLeft: 1,
+		marginTop: 1,
 	});
 	renderer.root.add(metaText);
 
-	const commandMenu = new BoxRenderable(renderer, {
+	const commandMenu = new SelectRenderable(renderer, {
 		visible: false,
-		borderColor: theme.mauve,
+		width: 50,
+		height: 8,
+		options: [],
+		wrapSelection: true,
+		showDescription: true,
+		textColor: theme.text,
+		selectedTextColor: theme.text,
+		selectedBackgroundColor: theme.mauve,
+		descriptionColor: theme.subtext,
 	});
 	renderer.root.add(commandMenu);
 
-	const commandMenuText = new TextRenderable(renderer, {
-		content: "",
-		fg: theme.text,
-	});
-	commandMenu.add(commandMenuText);
+	const commandMenuText = null;
 
-  const inputBox = new BoxRenderable(renderer, {
-    borderColor: theme.border,
-    paddingX: 1,
-    height: 6
+	const inputBox = new BoxRenderable(renderer, {
+		borderColor: theme.border,
+		paddingX: 1,
+		height: 6,
 	});
 	renderer.root.add(inputBox);
 
@@ -81,7 +56,7 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		textColor: theme.text,
 		focusedTextColor: theme.text,
 		placeholderColor: theme.muted,
-    cursorColor: theme.mauve,
+		cursorColor: theme.mauve,
 		keyBindings: [
 			{ name: "return", action: "submit" },
 			{ name: "return", shift: true, action: "newline" },
@@ -111,10 +86,24 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 	});
 	statusRow.add(tokenText);
 
-	const { root: reasoningDialog, inner: reasoningInner } = createOverlayDialog(renderer, {
+	const reasoningDialog = new BoxRenderable(renderer, {
+		position: "absolute",
+		alignItems: "center",
+		alignSelf: "center",
+		justifyContent: "center",
+		height: "100%",
+		width: "100%",
 		zIndex: 10,
+		visible: false,
 	});
 	renderer.root.add(reasoningDialog);
+
+	const reasoningInner = new BoxRenderable(renderer, {
+		border: true,
+		borderColor: theme.mauve,
+		flexDirection: "column",
+	});
+	reasoningDialog.add(reasoningInner);
 
 	const reasoningTitle = new TextRenderable(renderer, {
 		content: "Reasoning Effort",
@@ -129,10 +118,24 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 	});
 	reasoningInner.add(reasoningOptions);
 
-	const { root: hotkeysDialog, inner: hotkeysInner } = createOverlayDialog(renderer, {
+	const hotkeysDialog = new BoxRenderable(renderer, {
+		position: "absolute",
+		alignItems: "center",
+		alignSelf: "center",
+		justifyContent: "center",
+		height: "100%",
+		width: "100%",
 		zIndex: 11,
+		visible: false,
 	});
 	renderer.root.add(hotkeysDialog);
+
+	const hotkeysInner = new BoxRenderable(renderer, {
+		border: true,
+		borderColor: theme.mauve,
+		flexDirection: "column",
+	});
+	hotkeysDialog.add(hotkeysInner);
 
 	const hotkeysTitle = new TextRenderable(renderer, {
 		content: "Hotkeys",
@@ -197,7 +200,7 @@ export function createMarkdownMessage(renderer: CliRenderer): MarkdownRenderable
 		tableOptions: {
 			widthMode: "full",
 			wrapMode: "word",
-      selectable: true,
+			selectable: true,
 		},
 	});
 }

@@ -1,12 +1,8 @@
-import { LunaRuntime, SqliteThreadStore } from "../index.ts";
-import { formatDuration, formatStructuredMarkdown, formatTokenUsage } from "./format.ts";
-import { addAgentMessage } from "./messages.ts";
-import { SPINNER_FRAMES, theme } from "./theme.ts";
-import type { TuiRefs, TuiState } from "./types.ts";
-
-export function createRuntime(dbPath: string | undefined): LunaRuntime {
-	return new LunaRuntime({ store: new SqliteThreadStore({ dbPath }) });
-}
+import type { LunaRuntime } from "../../index.ts";
+import { addAgentMessage } from "../components/Messages.ts";
+import { SPINNER_FRAMES, theme } from "../config/index.ts";
+import type { TuiRefs, TuiState } from "../types.ts";
+import { formatDuration, formatStructuredMarkdown, formatTokenUsage } from "../utils/index.ts";
 
 export function updateMetaText(state: TuiState, refs: TuiRefs, model: string, mode?: string): void {
 	const elapsed =
