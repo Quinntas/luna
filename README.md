@@ -5,6 +5,7 @@ Luna is a Bun-based TypeScript monorepo for building a personalized AI agent wit
 ## What Is In This Repo
 
 - `apps/agent`: CLI agent that wires together model access, guardrails, memory, knowledge retrieval, tools, and personalization.
+- `apps/code`: Codex-backed runtime for thread, worktree, checkpoint, and session orchestration with Bun-based examples and tests.
 - `packages/env`: Environment loading and validation.
 - `packages/guard`: PII detection, redaction, and sensitivity classification.
 - `packages/ai`: AI provider abstraction for Gemini and LiteLLM-compatible backends.
@@ -95,6 +96,36 @@ The agent currently:
 - executes built-in tools through a ReAct-style loop
 - extracts facts from the exchange and stores them as memory
 
+## Run The Code Runtime
+
+Run the basic example:
+
+```bash
+bun run apps/code/examples/basic.ts
+```
+
+Run it with a trivial custom prompt:
+
+```bash
+LUNA_EXAMPLE_TEXT='What is 2+2? Reply with exactly 4.' bun run apps/code/examples/basic.ts
+```
+
+Useful `apps/code` commands:
+
+```bash
+# Run Bun tests for the app
+bun test apps/code/test
+
+# Typecheck the app
+bun run --cwd apps/code typecheck
+
+# Run example flows
+bun run --cwd apps/code example:basic
+bun run --cwd apps/code example:sqlite
+bun run --cwd apps/code example:restore
+bun run --cwd apps/code example:cleanup
+```
+
 ## Knowledge Graph Workflows
 
 Initialize Neo4j schema and start the local container:
@@ -162,6 +193,9 @@ bun run typecheck
 
 # Knowledge package tests
 bun run knowledge:test
+
+# Code app tests
+bun test apps/code/test
 ```
 
 ## Package Notes
@@ -221,7 +255,8 @@ bun run knowledge:test
 ```text
 luna/
 ├── apps/
-│   └── agent/
+│   ├── agent/
+│   └── code/
 ├── packages/
 │   ├── ai/
 │   ├── db/

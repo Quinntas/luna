@@ -1,0 +1,1 @@
+export { GitWorktreeClient } from "./gitCore";
