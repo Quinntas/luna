@@ -83,7 +83,9 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		state.history = [userEntry, ...state.history];
 		state.historyIndex = -1;
 		startSpinner(state, refs, "thinking", env.model);
-		refs.statusText.fg = theme.muted;
+    refs.statusText.fg = theme.muted;
+
+
 		try {
 			await runtime.sendMessage({
 				threadId: thread.id,
