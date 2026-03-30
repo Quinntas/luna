@@ -3,13 +3,13 @@ import { parseArgs } from "node:util";
 import {
 	BoxRenderable,
 	createCliRenderer,
-	InputRenderable,
 	MarkdownRenderable,
 	ScrollBoxRenderable,
 	SyntaxStyle,
+	TextareaRenderable,
 	TextRenderable,
 } from "@opentui/core";
-
+import type { ThreadTokenUsageSnapshot } from "./codex/typesCore";
 import { LunaRuntime, SqliteThreadStore } from "./index";
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -21,9 +21,6 @@ const env = {
 	dbPath: process.env.LUNA_DB_PATH,
 	repoRoot: process.env.LUNA_REPO_ROOT ?? process.cwd(),
 };
-
-const HOME = process.env.HOME ?? "";
-const shortPath = (p: string) => (HOME && p.startsWith(HOME) ? `~${p.slice(HOME.length)}` : p);
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +40,49 @@ const theme = {
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SCROLL_STEP = 3;
 
+function formatDuration(ms: number | null): string {
+	if (ms === null || ms < 0) {
+		return "--";
+	}
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) {
+		return `${hours}h ${minutes}m ${seconds}s`;
+	}
+	if (minutes > 0) {
+		return `${minutes}m ${seconds}s`;
+	}
+	if (seconds > 0) {
+		return `${seconds}s`;
+	}
+	return `${ms}ms`;
+}
+
+function formatCompactNumber(value: number): string {
+	if (value >= 1_000_000) {
+		return `${(value / 1_000_000).toFixed(1)}m`;
+	}
+	if (value >= 1_000) {
+		return `${(value / 1_000).toFixed(1)}k`;
+	}
+	return `${value}`;
+}
+
+function formatTokenUsage(usage: ThreadTokenUsageSnapshot | null): string {
+	if (!usage) {
+		return "--";
+	}
+	const used = usage.usedTokens;
+	const max = usage.maxTokens;
+	if (!max || max <= 0) {
+		return formatCompactNumber(used);
+	}
+	const percentage = Math.max(0, Math.min(100, Math.round((used / max) * 100)));
+	return `${formatCompactNumber(used)} (${percentage}%)`;
+}
+
 // ── TUI ──────────────────────────────────────────────────────────────────────
 
 async function runTui(opts: { resume: boolean; threadId?: string }): Promise<void> {
@@ -58,15 +98,6 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 
 	renderer.root.flexDirection = "column";
 
-	// Header
-	const header = new TextRenderable(renderer, {
-		content: "  luna",
-		height: 1,
-		paddingX: 2,
-		fg: theme.muted,
-	});
-	renderer.root.add(header);
-
 	// Message area
 	const scrollBox = new ScrollBoxRenderable(renderer, {
 		flexGrow: 1,
@@ -77,46 +108,107 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 	});
 	renderer.root.add(scrollBox);
 
-	// Hint bar
-	const hintBar = new TextRenderable(renderer, {
-		content: "  PgUp/PgDn scroll  ·  Ctrl+C quit",
+	const metaText = new TextRenderable(renderer, {
+		content: `  ${env.model}  ·  --`,
 		height: 1,
 		paddingX: 2,
 		fg: theme.muted,
 	});
-	renderer.root.add(hintBar);
+	renderer.root.add(metaText);
 
 	// Input box
 	const inputBox = new BoxRenderable(renderer, {
-		height: 3,
+		height: 8,
 		border: true,
 		borderStyle: "rounded",
 		borderColor: theme.border,
-		flexDirection: "row",
-		alignItems: "center",
 		paddingX: 1,
 	});
 	renderer.root.add(inputBox);
 
-	const promptGlyph = new TextRenderable(renderer, {
-		content: "❯ ",
-		width: 2,
-		fg: theme.mauve,
-	});
-	inputBox.add(promptGlyph);
-
-	const input = new InputRenderable(renderer, {
+	const input = new TextareaRenderable(renderer, {
 		flexGrow: 1,
-		placeholder: "Type a message and press Enter…",
+		placeholder: "Type a message. Enter sends, Shift+Enter adds a newline…",
+		wrapMode: "word",
+		textColor: theme.text,
+		focusedTextColor: theme.text,
+		placeholderColor: theme.muted,
+		cursorColor: theme.mauve,
+		keyBindings: [
+			{ name: "return", action: "submit" },
+			{ name: "return", shift: true, action: "newline" },
+		],
 	});
 	inputBox.add(input);
 
+	const statusRow = new BoxRenderable(renderer, {
+		height: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		paddingX: 2,
+	});
+	renderer.root.add(statusRow);
+
 	const statusText = new TextRenderable(renderer, {
-		content: "connecting",
-		width: 14,
+		content: "",
 		fg: theme.muted,
 	});
-	inputBox.add(statusText);
+	statusRow.add(statusText);
+
+	const statusSpacer = new BoxRenderable(renderer, { flexGrow: 1 });
+	statusRow.add(statusSpacer);
+
+	const tokenText = new TextRenderable(renderer, {
+		content: "--",
+		fg: theme.muted,
+	});
+	statusRow.add(tokenText);
+
+	const reasoningEmptyText = new TextRenderable(renderer, {
+		content: "No reasoning available for this turn yet.",
+		fg: theme.muted,
+	});
+
+	const reasoningDialog = new BoxRenderable(renderer, {
+		position: "absolute",
+		top: "10%",
+		left: "10%",
+		width: "80%",
+		height: "70%",
+		zIndex: 10,
+		visible: false,
+		border: true,
+		borderStyle: "rounded",
+		borderColor: theme.border,
+		backgroundColor: theme.surface,
+		flexDirection: "column",
+		paddingX: 1,
+		paddingY: 1,
+	});
+	renderer.root.add(reasoningDialog);
+
+	const reasoningTitle = new TextRenderable(renderer, {
+		content: "Reasoning  ·  Ctrl+R close",
+		height: 1,
+		fg: theme.mauve,
+		marginBottom: 1,
+	});
+	reasoningDialog.add(reasoningTitle);
+
+	const reasoningScrollBox = new ScrollBoxRenderable(renderer, {
+		flexGrow: 1,
+		scrollY: true,
+		stickyScroll: true,
+	});
+	reasoningDialog.add(reasoningScrollBox);
+
+	const reasoningContent = new MarkdownRenderable(renderer, {
+		content: "",
+		syntaxStyle,
+		streaming: true,
+	});
+	reasoningScrollBox.add(reasoningEmptyText);
+	reasoningScrollBox.add(reasoningContent);
 
 	// ── State ─────────────────────────────────────────────────────────────────
 
@@ -124,20 +216,59 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 	let currentResponse: MarkdownRenderable | null = null;
 	let spinnerTimer: ReturnType<typeof setInterval> | undefined;
 	let spinnerIdx = 0;
+	let lastTurnDurationMs: number | null = null;
+	let activeTurnStartedAtMs: number | null = null;
+	let latestTokenUsage: ThreadTokenUsageSnapshot | null = null;
+	let reasoningOpen = false;
+
+	const updateMetaText = () => {
+		const elapsed =
+			activeTurnStartedAtMs !== null ? Date.now() - activeTurnStartedAtMs : lastTurnDurationMs;
+		metaText.content = `  ${env.model}  ·  ${formatDuration(elapsed)}`;
+	};
+
+	const updateTokenText = () => {
+		tokenText.content = formatTokenUsage(latestTokenUsage);
+	};
+
+	const updateReasoningEmptyState = () => {
+		reasoningEmptyText.visible = reasoningContent.content.trim().length === 0;
+	};
+
+	const setReasoningOpen = (open: boolean) => {
+		reasoningOpen = open;
+		reasoningDialog.visible = open;
+		reasoningScrollBox.stickyScroll = true;
+		updateReasoningEmptyState();
+		if (!open) {
+			input.focus();
+		}
+	};
+
+	updateMetaText();
+	updateTokenText();
+	updateReasoningEmptyState();
 
 	const startSpinner = (label: string) => {
-		statusText.content = `${SPINNER_FRAMES[0]} ${label}`;
+		if (label === "thinking") {
+			statusText.content = `${SPINNER_FRAMES[0]} thinking`;
+		} else {
+			statusText.content = "";
+		}
 		spinnerTimer = setInterval(() => {
-			statusText.content = `${SPINNER_FRAMES[spinnerIdx++ % SPINNER_FRAMES.length]} ${label}`;
+			if (label === "thinking") {
+				statusText.content = `${SPINNER_FRAMES[spinnerIdx++ % SPINNER_FRAMES.length]} thinking`;
+			}
+			updateMetaText();
 		}, 80);
 	};
 
-	const stopSpinner = (label: string) => {
+	const stopSpinner = () => {
 		if (spinnerTimer !== undefined) {
 			clearInterval(spinnerTimer);
 			spinnerTimer = undefined;
 		}
-		statusText.content = label;
+		statusText.content = "";
 	};
 
 	// ── Message helpers ───────────────────────────────────────────────────────
@@ -187,42 +318,97 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 
 	const runtime = new LunaRuntime({ store: new SqliteThreadStore({ dbPath: env.dbPath }) });
 
-	const finishTurn = (status: string, statusColor?: string) => {
+	const finishTurn = (statusColor?: string) => {
+		if (activeTurnStartedAtMs !== null) {
+			lastTurnDurationMs = Math.max(0, Date.now() - activeTurnStartedAtMs);
+			activeTurnStartedAtMs = null;
+			updateMetaText();
+		}
 		if (currentResponse) {
 			currentResponse.streaming = false;
 			currentResponse = null;
 		}
-		stopSpinner(status);
-		if (statusColor) statusText.fg = statusColor;
+		reasoningContent.streaming = false;
+		updateReasoningEmptyState();
+		stopSpinner();
+		statusText.fg = statusColor ?? theme.muted;
 		inputEnabled = true;
 		input.focus();
 	};
 
 	runtime.on((event) => {
+		if (event.type === "turn.started") {
+			activeTurnStartedAtMs = Date.now();
+			updateMetaText();
+			return;
+		}
 		if (event.type === "content.delta") {
+			if (
+				event.payload.streamKind === "reasoning_text" ||
+				event.payload.streamKind === "reasoning_summary_text" ||
+				event.payload.streamKind === "plan_text"
+			) {
+				reasoningContent.streaming = true;
+				reasoningContent.content += event.payload.delta;
+				updateReasoningEmptyState();
+				reasoningScrollBox.stickyScroll = true;
+				return;
+			}
 			currentResponse ??= addAgentMessage();
 			currentResponse.content += event.payload.delta;
 			return;
 		}
+		if (event.type === "thread.token-usage.updated") {
+			latestTokenUsage = event.payload.usage;
+			updateTokenText();
+			return;
+		}
+		if (event.type === "turn.plan.updated") {
+			const explanation =
+				typeof event.payload.explanation === "string" ? event.payload.explanation.trim() : "";
+			const plan = Array.isArray(event.payload.plan)
+				? event.payload.plan
+						.map((step) => {
+							if (!step || typeof step !== "object") return null;
+							const record = step as { step?: unknown; status?: unknown };
+							const label = typeof record.step === "string" ? record.step : "step";
+							const status = typeof record.status === "string" ? record.status : "pending";
+							return `- [${status === "completed" ? "x" : " "}] ${label}`;
+						})
+						.filter((value): value is string => value !== null)
+						.join("\n")
+				: "";
+			const sections = [explanation, plan].filter((value) => value.length > 0);
+			if (sections.length > 0) {
+				reasoningContent.content = sections.join("\n\n");
+				reasoningContent.streaming = true;
+				updateReasoningEmptyState();
+				reasoningScrollBox.stickyScroll = true;
+			}
+			return;
+		}
 		if (event.type === "turn.completed") {
-			finishTurn("idle");
-			statusText.fg = theme.muted;
+			finishTurn();
 			return;
 		}
 		if (event.type === "turn.aborted") {
-			finishTurn("aborted", theme.yellow);
+			finishTurn(theme.yellow);
 			return;
 		}
 		if (event.type === "session.error") {
-			finishTurn("error", theme.red);
+			finishTurn(theme.red);
 			return;
 		}
 		if (event.type === "session.exited") {
+			activeTurnStartedAtMs = null;
+			updateMetaText();
 			if (currentResponse) {
 				currentResponse.streaming = false;
 				currentResponse = null;
 			}
-			stopSpinner("exited");
+			reasoningContent.streaming = false;
+			updateReasoningEmptyState();
+			stopSpinner();
 			statusText.fg = theme.muted;
 			inputEnabled = false;
 		}
@@ -236,6 +422,9 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 		if (!thread || !inputEnabled) return;
 		inputEnabled = false;
 		scrollBox.stickyScroll = true;
+		reasoningContent.content = "";
+		reasoningContent.streaming = true;
+		updateReasoningEmptyState();
 		addUserMessage(text);
 		currentResponse = addAgentMessage();
 		startSpinner("thinking");
@@ -248,9 +437,18 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 				reasoningEffort: "low",
 			});
 		} catch {
-			finishTurn("error", theme.red);
+			finishTurn(theme.red);
 		}
 	}
+
+	input.onSubmit = () => {
+		const text = input.plainText.trim();
+		if (!text || !inputEnabled) {
+			return;
+		}
+		input.initialValue = "";
+		void sendMessage(text);
+	};
 
 	// ── Key handling ─────────────────────────────────────────────────────────
 
@@ -268,26 +466,45 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 			return;
 		}
 
-		// Send on Enter
-		if (event.name === "return" && !event.ctrl && !event.shift && !event.meta) {
-			const text = input.value.trim();
-			if (text && inputEnabled) {
-				input.value = "";
-				void sendMessage(text);
+		if (event.ctrl && event.name === "r") {
+			setReasoningOpen(!reasoningOpen);
+			event.stopPropagation();
+			return;
+		}
+
+		if (event.ctrl && event.shift && event.name === "c") {
+			const selectedText = renderer.getSelection()?.getSelectedText().trim() ?? "";
+			if (selectedText) {
+				renderer.copyToClipboardOSC52(selectedText);
 			}
+			event.stopPropagation();
+			return;
+		}
+
+		if (reasoningOpen && event.name === "escape") {
+			setReasoningOpen(false);
 			event.stopPropagation();
 			return;
 		}
 
 		// Keyboard scroll
 		if (event.name === "pageup" || (event.shift && event.name === "up")) {
-			scrollBox.stickyScroll = false;
-			scrollBox.scrollBy(-SCROLL_STEP);
+			if (reasoningOpen) {
+				reasoningScrollBox.stickyScroll = false;
+				reasoningScrollBox.scrollBy(-SCROLL_STEP);
+			} else {
+				scrollBox.stickyScroll = false;
+				scrollBox.scrollBy(-SCROLL_STEP);
+			}
 			event.stopPropagation();
 			return;
 		}
 		if (event.name === "pagedown" || (event.shift && event.name === "down")) {
-			scrollBox.scrollBy(SCROLL_STEP);
+			if (reasoningOpen) {
+				reasoningScrollBox.scrollBy(SCROLL_STEP);
+			} else {
+				scrollBox.scrollBy(SCROLL_STEP);
+			}
 			event.stopPropagation();
 			return;
 		}
@@ -318,15 +535,15 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 				},
 			});
 		}
-		header.content = `  luna  ·  ${env.model}  ·  ${shortPath(thread.workspace.cwd)}`;
-		stopSpinner("idle");
+		updateMetaText();
+		stopSpinner();
 		statusText.fg = theme.muted;
 		inputEnabled = true;
 		input.focus();
 	} catch (error) {
-		stopSpinner("failed");
+		stopSpinner();
 		statusText.fg = theme.red;
-		header.content = `  luna  ·  ${error instanceof Error ? error.message : String(error)}`;
+		metaText.content = `  luna  ·  ${error instanceof Error ? error.message : String(error)}`;
 	}
 }
 
