@@ -30,7 +30,18 @@
 
 - run tests with `bun test`
 - run package typechecks with `bun run typecheck`
+- run the source TUI with `bun run tui`
+- build a Bun-linked launcher with `bun run build:tui`
+- build a standalone native executable with `bun run build:tui:compile`
+- install the standalone executable as `luna` in `~/.local/bin` with `bun run install:tui`
 - run examples with `bun run example:basic`, `bun run example:sqlite`, `bun run example:restore`, or `bun run example:cleanup`
+
+## TUI Distribution
+
+- `bin/luna` is the package bin launcher for link/publish workflows
+- `dist/luna-tui` is the compiled standalone executable
+- `install:tui` also adds `~/.local/bin` to the active shell rc file when needed
+- new TUI sessions default to `process.cwd()`, so `luna` targets the repo in your current shell directory
 
 ## Worktree Lifecycle
 

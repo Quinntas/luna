@@ -2,12 +2,12 @@ import { parseArgs } from "node:util";
 
 import {
 	BoxRenderable,
+	createCliRenderer,
 	InputRenderable,
 	MarkdownRenderable,
 	ScrollBoxRenderable,
 	SyntaxStyle,
 	TextRenderable,
-	createCliRenderer,
 } from "@opentui/core";
 
 import { LunaRuntime, SqliteThreadStore } from "./index";
@@ -28,16 +28,16 @@ const shortPath = (p: string) => (HOME && p.startsWith(HOME) ? `~${p.slice(HOME.
 // ── Theme ────────────────────────────────────────────────────────────────────
 
 const theme = {
-	text:       "#cdd6f4",
-	subtext:    "#a6adc8",
-	muted:      "#585b70",
-	surface:    "#1e1e2e",
-	border:     "#45475a",
-	mauve:      "#cba6f7",
-	sky:        "#89dceb",
-	red:        "#f38ba8",
-	yellow:     "#f9e2af",
-	green:      "#a6e3a1",
+	text: "#cdd6f4",
+	subtext: "#a6adc8",
+	muted: "#585b70",
+	surface: "#1e1e2e",
+	border: "#45475a",
+	mauve: "#cba6f7",
+	sky: "#89dceb",
+	red: "#f38ba8",
+	yellow: "#f9e2af",
+	green: "#a6e3a1",
 };
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -218,7 +218,10 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 			return;
 		}
 		if (event.type === "session.exited") {
-			if (currentResponse) { currentResponse.streaming = false; currentResponse = null; }
+			if (currentResponse) {
+				currentResponse.streaming = false;
+				currentResponse = null;
+			}
 			stopSpinner("exited");
 			statusText.fg = theme.muted;
 			inputEnabled = false;
@@ -255,7 +258,9 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 		// Quit
 		if (event.ctrl && event.name === "c") {
 			void (async () => {
-				try { if (thread) await runtime.stopThread(thread.id); } catch {}
+				try {
+					if (thread) await runtime.stopThread(thread.id);
+				} catch {}
 				runtime.dispose();
 				renderer.destroy();
 				process.exit(0);
@@ -295,9 +300,7 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 	try {
 		if (opts.resume) {
 			const threads = await runtime.listThreads();
-			const target = opts.threadId
-				? threads.find((t) => t.id === opts.threadId)
-				: threads.at(-1);
+			const target = opts.threadId ? threads.find((t) => t.id === opts.threadId) : threads.at(-1);
 			if (!target) throw new Error("No thread to resume");
 			thread = await runtime.resumeThread(target.id);
 		} else {
@@ -329,7 +332,7 @@ async function runTui(opts: { resume: boolean; threadId?: string }): Promise<voi
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
 	const { values } = parseArgs({
 		args: process.argv.slice(2),
 		options: { resume: { type: "string", short: "r" } },
@@ -341,7 +344,9 @@ async function main(): Promise<void> {
 	await runTui({ resume: resumeFlag, threadId });
 }
 
-main().catch((error) => {
-	process.stderr.write(`✖ ${error instanceof Error ? error.message : String(error)}\n`);
-	process.exitCode = 1;
-});
+if (import.meta.main) {
+	main().catch((error) => {
+		process.stderr.write(`✖ ${error instanceof Error ? error.message : String(error)}\n`);
+		process.exitCode = 1;
+	});
+}

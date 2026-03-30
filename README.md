@@ -119,6 +119,16 @@ bun test apps/code/test
 # Typecheck the app
 bun run --cwd apps/code typecheck
 
+# Run the terminal UI in the current repo
+bun run tui
+
+# Build launchers for luna
+bun run tui:build
+bun run tui:compile
+
+# Compile and install luna into ~/.local/bin
+bun run tui:install
+
 # Run example flows
 bun run --cwd apps/code example:basic
 bun run --cwd apps/code example:sqlite
@@ -128,6 +138,29 @@ bun run --cwd apps/code example:cleanup
 
 `apps/code` thread state is stored in the shared SQLite database at `data/luna.db` by default.
 Set `LUNA_DB_PATH` if you want the whole repo to use a different SQLite file.
+
+`bun run tui` only works inside the Luna workspace.
+
+To use the TUI from any repository, install the shell command once from this workspace:
+
+```bash
+bun run tui:install
+```
+
+The installer compiles `luna`, symlinks it into `~/.local/bin`, and adds
+`~/.local/bin` to your shell startup file if needed.
+
+Then launch it from whatever repo your shell is currently in:
+
+```bash
+cd /path/to/other-repo
+luna
+```
+
+`luna` uses the terminal's current working directory as the repo root for new sessions.
+`apps/code` also exposes a package `bin` entry for package-manager link/publish workflows through
+`apps/code/bin/luna`, but the compiled `dist/luna-tui` binary is the simplest way to get a
+shell-global command.
 
 ## Knowledge Graph Workflows
 

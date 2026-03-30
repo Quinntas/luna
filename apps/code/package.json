@@ -2,6 +2,9 @@
 	"name": "@luna/code",
 	"private": true,
 	"type": "module",
+	"bin": {
+		"luna": "./bin/luna"
+	},
 	"main": "./src/index.ts",
 	"module": "./src/index.ts",
 	"types": "./src/index.ts",
@@ -16,6 +19,9 @@
 		"test": "bun test",
 		"cli": "bun run src/cli.ts",
 		"tui": "bun run src/tui.ts",
+		"build:tui": "bun build src/bin/luna-tui.ts --target bun --outdir dist",
+		"build:tui:compile": "bun build src/bin/luna-tui.ts --compile --outfile dist/luna-tui",
+		"install:tui": "bun run build:tui:compile && bun run scripts/install-tui.ts",
 		"example:basic": "bun run examples/basic.ts",
 		"example:tui": "bun run examples/tui.ts",
 		"example:sqlite": "bun run examples/sqlite.ts",
