@@ -23,4 +23,5 @@ export {
 	rlmIterationPrompt,
 } from "./rlm/iteration.ts";
 export { rlmSystemPrompt } from "./rlm/system.ts";
+export { branchNamePrompt, commitMessagePrompt, threadTitlePrompt } from "./tui/index.ts";
 export { pdfPageAnalysisPrompt, visionExtractionPrompt } from "./vision/extraction.ts";

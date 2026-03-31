@@ -1,8 +1,10 @@
 import { parseArgs } from "node:util";
 import { createCliRenderer } from "@opentui/core";
+import { generateThreadTitle } from "./commands/threadName.ts";
 import { createDialogManager } from "./components/dialogs/index.ts";
 import { createLayout } from "./components/Layout.ts";
-import { addAgentMessage, addUserMessage } from "./components/Messages.ts";
+import { addAgentMessage, addUserMessage, loadHistory } from "./components/Messages.ts";
+import { loadSidebarThreads, updateSidebar } from "./components/Sidebar.ts";
 import { env, theme } from "./config/index.ts";
 import { SLASH_COMMANDS } from "./input/commands.ts";
 import { runSlashCommand, updateCommandMenu, wireInput } from "./input/index.ts";
@@ -38,7 +40,8 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 
 	wireRuntime(runtime, state, refs, env.model, saveHistory);
 	dialogManager.updateReasoning();
-	updateMetaText(state, refs, env.model);
+	const initialMode = state.worktreeMode ? "worktree" : "repo";
+	updateMetaText(state, refs, env.model, initialMode);
 	updateTokenText(state, refs);
 	updateCommandMenu(state, refs);
 
@@ -50,7 +53,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		const worktreeMode = state.worktreeMode ? "reuse-or-create" : "repo-root";
 		thread = await runtime.startThread({
 			threadId,
-			title: threadId,
+			title: "New thread",
 			repoRoot: env.repoRoot,
 			worktree: { mode: worktreeMode },
 			codex: {
@@ -60,8 +63,13 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 				homePath: env.homePath,
 			},
 		});
+		state.threadTitle = "New thread";
 		const modeLabel = state.worktreeMode ? "worktree" : "repo";
 		updateMetaText(state, refs, env.model, modeLabel);
+		if (state.sidebarVisible) {
+			state.sidebarProjects = await loadSidebarThreads(runtime);
+			updateSidebar(state, refs);
+		}
 	}
 
 	async function sendMessage(text: string): Promise<void> {
@@ -82,6 +90,20 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		const userEntry: HistoryEntry = { role: "user", content: text };
 		state.history = [userEntry, ...state.history];
 		state.historyIndex = -1;
+
+		if (state.history.length === 1) {
+			state.threadTitle = "New thread";
+			const currentThreadId = thread.id;
+			generateThreadTitle(text).then(async (title) => {
+				await runtime.updateThreadTitle(currentThreadId, title);
+				state.threadTitle = title;
+				if (state.sidebarVisible) {
+					state.sidebarProjects = await loadSidebarThreads(runtime);
+					updateSidebar(state, refs);
+				}
+			});
+		}
+
 		startSpinner(state, refs, "thinking", env.model);
 		refs.statusText.fg = theme.muted;
 		try {
@@ -129,6 +151,8 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 					}));
 				}
 				state.worktreeMode = threadRecord.workspace.mode === "worktree";
+				state.threadTitle = threadRecord.title;
+				loadHistory(refs, state.history);
 			}
 			const modeLabel = state.worktreeMode ? "worktree" : "repo";
 			updateMetaText(state, refs, env.model, modeLabel);

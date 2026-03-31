@@ -12,23 +12,64 @@ import type { CliRenderer, TuiRefs } from "../types.ts";
 
 export function createLayout(renderer: CliRenderer): TuiRefs {
 	const syntaxStyle = createSyntaxStyle();
-	renderer.root.flexDirection = "column";
 
+	// Main Layout Container (row direction)
+	const layoutContainer = new BoxRenderable(renderer, {
+		flexDirection: "row",
+		flexGrow: 1,
+	});
+	renderer.root.add(layoutContainer);
+
+	// =====================
+	// Sidebar Components
+	// =====================
+	const sidebarContainer = new BoxRenderable(renderer, {
+		width: 0, // Hidden by default
+		height: "100%",
+	});
+	layoutContainer.add(sidebarContainer);
+
+	const sidebar = new SelectRenderable(renderer, {
+		visible: false,
+		width: "100%",
+		height: "100%",
+		options: [],
+		wrapSelection: true,
+		showDescription: true,
+		textColor: theme.text,
+		selectedTextColor: theme.text,
+		selectedBackgroundColor: theme.mauve,
+		descriptionColor: theme.subtext,
+	});
+	sidebarContainer.add(sidebar);
+
+	// =====================
+	// Chat Components
+	// =====================
+	const chatContainer = new BoxRenderable(renderer, {
+		flexDirection: "column",
+		flexGrow: 1,
+	});
+	layoutContainer.add(chatContainer);
+
+	// Chat Messages (ScrollBox)
 	const scrollBox = new ScrollBoxRenderable(renderer, {
 		flexGrow: 1,
 		scrollY: true,
 		stickyScroll: true,
 	});
-	renderer.root.add(scrollBox);
+	chatContainer.add(scrollBox);
 
+	// Meta Text (model indicator)
 	const metaText = new TextRenderable(renderer, {
 		content: `${env.model}`,
 		fg: theme.muted,
 		marginLeft: 1,
 		marginTop: 1,
 	});
-	renderer.root.add(metaText);
+	chatContainer.add(metaText);
 
+	// Command Menu (slash commands dropdown)
 	const commandMenu = new SelectRenderable(renderer, {
 		visible: false,
 		width: 50,
@@ -41,17 +82,19 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		selectedBackgroundColor: theme.mauve,
 		descriptionColor: theme.subtext,
 	});
-	renderer.root.add(commandMenu);
+	chatContainer.add(commandMenu);
 
 	const commandMenuText = null;
 
+	// Input Box
 	const inputBox = new BoxRenderable(renderer, {
 		borderColor: theme.border,
 		paddingX: 1,
 		height: 6,
 	});
-	renderer.root.add(inputBox);
+	chatContainer.add(inputBox);
 
+	// Input Textarea
 	const input = new TextareaRenderable(renderer, {
 		textColor: theme.text,
 		focusedTextColor: theme.text,
@@ -66,26 +109,42 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 	input.selectionFg = theme.text;
 	inputBox.add(input);
 
+	// Status Row
 	const statusRow = new BoxRenderable(renderer, {
 		height: 1,
 		flexDirection: "row",
 		alignItems: "center",
 	});
-	renderer.root.add(statusRow);
+	chatContainer.add(statusRow);
 
+	// Status Text
 	const statusText = new TextRenderable(renderer, {
 		content: "",
 		fg: theme.muted,
 	});
 	statusRow.add(statusText);
+
+	// Spacer
 	statusRow.add(new BoxRenderable(renderer, { flexGrow: 1 }));
 
+	// Token Text
 	const tokenText = new TextRenderable(renderer, {
 		content: "",
 		fg: theme.muted,
 	});
 	statusRow.add(tokenText);
 
+	// Hotkey Hint
+	const hotkeyHint = new TextRenderable(renderer, {
+		content: "ctrl+b threads | ctrl+h hotkeys",
+		fg: theme.muted,
+		marginLeft: 1,
+	});
+	statusRow.add(hotkeyHint);
+
+	// =====================
+	// Dialog Components (overlays)
+	// =====================
 	const reasoningDialog = new BoxRenderable(renderer, {
 		position: "absolute",
 		alignItems: "center",
@@ -150,12 +209,16 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 	});
 	hotkeysInner.add(hotkeysContent);
 
+	// Hidden MarkdownRenderable (for message rendering)
 	void new MarkdownRenderable(renderer, {
 		content: "",
 		syntaxStyle,
 		visible: false,
 	});
 
+	// =====================
+	// Event Handlers
+	// =====================
 	inputBox.onMouseDown = (e) => {
 		e.preventDefault();
 		input.focus();
@@ -183,6 +246,9 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		inputBox,
 		statusText,
 		tokenText,
+		hotkeyHint,
+		sidebar,
+		sidebarContainer,
 		reasoningDialog,
 		reasoningOptions,
 		hotkeysDialog,

@@ -29,6 +29,9 @@ export interface TuiRefs {
 	readonly inputBox: BoxRenderable;
 	readonly statusText: TextRenderable;
 	readonly tokenText: TextRenderable;
+	readonly hotkeyHint: TextRenderable;
+	readonly sidebar: SelectRenderable;
+	readonly sidebarContainer: BoxRenderable;
 	readonly reasoningDialog: BoxRenderable;
 	readonly reasoningOptions: TextRenderable;
 	readonly hotkeysDialog: BoxRenderable;
@@ -53,10 +56,34 @@ export function createInitialState(): TuiState {
 		reasoningEffortIdx: 0,
 		commandMatches: [],
 		commandSelectionIdx: 0,
-		worktreeMode: false,
+		worktreeMode: true,
 		history: [],
 		historyIndex: -1,
+		threadTitle: "New thread",
+		sidebarVisible: false,
+		sidebarProjects: [],
+		selectedProjectIdx: 0,
+		selectedThreadIdx: 0,
+		sidebarMode: "projects", // "projects" | "threads"
 	};
+}
+
+export interface SidebarThread {
+	id: string;
+	title: string;
+	branch: string | null;
+	mode: "repo-root" | "worktree";
+	repoRoot: string;
+	createdAt: string;
+	updatedAt: string;
+	status?: "clean" | "dirty";
+}
+
+export interface SidebarProject {
+	name: string;
+	threads: SidebarThread[];
+	expanded: boolean;
+	currentBranch: string;
 }
 
 export interface TuiState {
@@ -75,4 +102,10 @@ export interface TuiState {
 	worktreeMode: boolean;
 	history: HistoryEntry[];
 	historyIndex: number;
+	threadTitle: string;
+	sidebarVisible: boolean;
+	sidebarProjects: SidebarProject[];
+	selectedProjectIdx: number;
+	selectedThreadIdx: number;
+	sidebarMode: "projects" | "threads";
 }

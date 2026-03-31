@@ -30,8 +30,14 @@
     },
     "apps/code": {
       "name": "@luna/code",
+      "bin": {
+        "luna": "./bin/luna",
+      },
       "dependencies": {
+        "@luna/ai": "workspace:*",
         "@luna/db": "workspace:*",
+        "@luna/prompts": "workspace:*",
+        "ai": "^4.0.0",
         "pino": "^9.9.0",
       },
       "devDependencies": {

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type { LunaRuntime } from "../../index.ts";
 import { env } from "../config/index.ts";
 import type { TuiRefs, TuiState } from "../types.ts";
+import { generateBranchName, generateCommitMessage } from "../utils/aiGenerator.ts";
 
 interface GitChange {
 	readonly file: string;
@@ -106,34 +107,6 @@ function sanitizeBranchName(name: string): string {
 		.replace(/-+/g, "-")
 		.replace(/^\/+|\/+$/g, "")
 		.slice(0, 50);
-}
-
-async function generateBranchName(changes: GitChange[], untracked: string[]): Promise<string> {
-	const allFiles = [
-		...changes.map((c) => `${c.status === "D" ? "deleted" : "modified"}: ${c.file}`),
-		...untracked.map((f) => `new: ${f}`),
-	].join("\n");
-
-	const words = allFiles
-		.slice(0, 200)
-		.split(/[^a-zA-Z]+/)
-		.filter(Boolean)
-		.slice(0, 3);
-	const description = words.join("-");
-	const branchName = sanitizeBranchName(`feature/${description || "update"}`);
-
-	return branchName || `luna/pr-${Date.now()}`;
-}
-
-async function generateCommitMessage(changes: GitChange[], untracked: string[]): Promise<string> {
-	const allFiles = [
-		...changes.map((c) => `${c.status === "D" ? "deleted" : "modified"}: ${c.file}`),
-		...untracked.map((f) => `new: ${f}`),
-	].join("\n");
-
-	const filesSummary = allFiles.split("\n").slice(0, 5).join(", ");
-
-	return `chore: updates (${filesSummary})`;
 }
 
 export async function runPrCommand(

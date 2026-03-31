@@ -30,7 +30,10 @@
 		"example:cleanup": "bun run examples/cleanup.ts"
 	},
 	"dependencies": {
+		"@luna/ai": "workspace:*",
 		"@luna/db": "workspace:*",
+		"@luna/prompts": "workspace:*",
+		"ai": "^4.0.0",
 		"pino": "^9.9.0"
 	},
 	"devDependencies": {
