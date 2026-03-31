@@ -16,7 +16,7 @@ export type ActiveDialog = "reasoning" | "hotkeys" | null;
 export interface SlashCommand {
 	readonly name: string;
 	readonly description: string;
-	readonly action: "hotkeys" | "reasoning" | "mode" | "clear" | "pr";
+	readonly action: "hotkeys" | "reasoning" | "mode" | "clear" | "new" | "pr";
 }
 
 export interface TuiRefs {
@@ -69,6 +69,8 @@ export function createInitialState(): TuiState {
 		currentBranch: null,
 		currentWorktreePath: null,
 		currentCwd: "",
+		pendingWorktree: null,
+		selectedHistoryText: null,
 	};
 }
 
@@ -116,4 +118,6 @@ export interface TuiState {
 	currentBranch: string | null;
 	currentWorktreePath: string | null;
 	currentCwd: string;
+	pendingWorktree: { repoRoot: string; mainBranch: string; threadId: string } | null;
+	selectedHistoryText: string | null;
 }

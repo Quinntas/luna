@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import { createModel } from "@luna/ai";
 import { createCliRenderer } from "@opentui/core";
+import { generateText, type LanguageModel } from "ai";
 import { generateThreadTitleWithModel } from "./commands/threadName.ts";
 import { createDialogManager } from "./components/dialogs/index.ts";
 import { createLayout } from "./components/Layout.ts";
@@ -21,11 +22,37 @@ import { createRuntime } from "./runtime/factory.ts";
 import type { HistoryEntry } from "./types.ts";
 import { createInitialState } from "./types.ts";
 
+function sanitizeWorktreeName(input: string): string {
+	return input
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, "")
+		.replace(/\s+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "")
+		.slice(0, 40);
+}
+
+async function generateWorktreeName(message: string, model: LanguageModel): Promise<string> {
+	const prompt = `Generate a short, descriptive branch name (2-4 words max) in kebab-case for a git branch based on this user request. Only respond with the branch name, nothing else.
+
+User request: ${message}
+
+Branch name:`;
+
+	const { text } = await generateText({
+		model,
+		prompt,
+	});
+	return sanitizeWorktreeName(text.trim());
+}
+
 export async function runTui(opts: { resume: boolean; threadId?: string }): Promise<void> {
 	const renderer = await createCliRenderer({
 		useAlternateScreen: true,
 		exitOnCtrlC: false,
 		useMouse: true,
+		useConsole: false,
+		openConsoleOnError: false,
 	});
 	const refs = createLayout(renderer);
 	const state = createInitialState();
@@ -123,6 +150,60 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 			});
 			return;
 		}
+
+		if (state.pendingWorktree) {
+			const { repoRoot, mainBranch, threadId } = state.pendingWorktree;
+			refs.statusText.content = "Generating worktree name...";
+
+			let worktreeName: string;
+			try {
+				worktreeName = await generateWorktreeName(text, aiModel);
+				if (!worktreeName) {
+					worktreeName = sanitizeWorktreeName(text);
+				}
+			} catch {
+				worktreeName = sanitizeWorktreeName(text);
+			}
+
+			refs.statusText.content = "Creating worktree...";
+
+			const workThread = await runtime.startThread({
+				threadId,
+				title: worktreeName,
+				repoRoot,
+				worktree: {
+					mode: "reuse-or-create",
+					branch: mainBranch,
+					preferredBranchName: worktreeName,
+				},
+				codex: {
+					model: env.model,
+					runtimeMode: "full-access",
+					binaryPath: env.binaryPath,
+					homePath: env.homePath,
+				},
+			});
+
+			const threadRecord = await runtime.getThread(workThread.id);
+			if (threadRecord) {
+				state.currentThreadId = threadRecord.id;
+				state.currentBranch = threadRecord.workspace.branch;
+				state.currentWorktreePath = threadRecord.workspace.worktreePath;
+				state.currentCwd = threadRecord.workspace.cwd;
+				state.worktreeMode = true;
+				state.threadTitle = threadRecord.title;
+				state.pendingWorktree = null;
+
+				if (state.sidebarVisible) {
+					state.sidebarProjects = await loadSidebarThreads(runtime);
+					updateSidebar(state, refs);
+				}
+
+				const modeLabel = state.worktreeMode ? "worktree" : "repo";
+				updateMetaText(state, refs, env.model, modeLabel);
+			}
+		}
+
 		await ensureThread();
 		if (!thread) return;
 		state.inputEnabled = false;

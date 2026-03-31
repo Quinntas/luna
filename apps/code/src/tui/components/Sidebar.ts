@@ -42,6 +42,9 @@ function execGit(
 		child.stderr.on("data", (data) => {
 			stderr += data.toString();
 		});
+		child.on("error", (err) => {
+			resolve({ stdout, stderr: err.message, code: -1 });
+		});
 		child.on("close", (code) => {
 			resolve({ stdout, stderr, code });
 		});

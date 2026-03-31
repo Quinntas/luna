@@ -114,6 +114,7 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		height: 1,
 		flexDirection: "row",
 		alignItems: "center",
+		marginLeft: 1,
 	});
 	chatContainer.add(statusRow);
 
@@ -139,6 +140,7 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		content: "ctrl+b threads | ctrl+h hotkeys",
 		fg: theme.muted,
 		marginLeft: 1,
+		marginRight: 1,
 	});
 	statusRow.add(hotkeyHint);
 
@@ -227,6 +229,7 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		e.preventDefault();
 		input.focus();
 	};
+
 	metaText.onMouseDown = (e) => {
 		e.preventDefault();
 		input.focus();

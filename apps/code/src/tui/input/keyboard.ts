@@ -34,6 +34,9 @@ async function execGit(
 		child.stderr.on("data", (data) => {
 			stderr += data.toString();
 		});
+		child.on("error", (err) => {
+			resolve({ stdout, stderr: err.message, code: -1 });
+		});
 		child.on("close", (code) => {
 			resolve({ stdout, stderr, code });
 		});
@@ -43,6 +46,42 @@ async function execGit(
 async function getCurrentBranch(cwd: string): Promise<string | null> {
 	const result = await execGit("git", ["branch", "--show-current"], cwd);
 	return result.stdout.trim() || null;
+}
+
+async function runNewThreadCommand(
+	state: TuiState,
+	refs: TuiRefs,
+	runtime: LunaRuntime,
+	repoRoot: string,
+): Promise<void> {
+	refs.statusText.content = "Creating new thread... (type your first message to name the worktree)";
+
+	const mainBranch = await getCurrentBranch(repoRoot);
+	if (!mainBranch) {
+		refs.statusText.content = "Error: Not on a branch in main repo";
+		return;
+	}
+
+	const threadId = `thread-${Date.now()}`;
+	const tempWorktreeName = `worktree-${Date.now()}`;
+
+	state.currentThreadId = threadId;
+	state.currentBranch = mainBranch;
+	state.currentWorktreePath = null;
+	state.currentCwd = repoRoot;
+	state.worktreeMode = true;
+	state.threadTitle = "New thread";
+	state.history = [];
+	state.historyIndex = -1;
+	state.pendingWorktree = {
+		repoRoot,
+		mainBranch,
+		threadId,
+	};
+
+	clearChatHistory(refs);
+	refs.input.focus();
+	refs.statusText.content = "Type your first message to create worktree...";
 }
 
 export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
@@ -136,6 +175,10 @@ export function runSlashCommand(
 		clearChatHistory(refs);
 		return true;
 	}
+	if (command.action === "new") {
+		void runNewThreadCommand(state, refs, runtime, env.repoRoot);
+		return true;
+	}
 	if (command.action === "pr") {
 		void runPrCommand(state, refs, runtime, model);
 		return true;
@@ -202,8 +245,11 @@ export function handleKeyPress(
 			return;
 		}
 		if (event.name === "return") {
+			event.preventDefault?.();
+			event.stopPropagation();
 			const threadId = getSelectedThreadId(state);
 			if (threadId) {
+				refs.sidebar.blur();
 				void (async () => {
 					try {
 						refs.statusText.content = "Switching to thread...";
@@ -245,8 +291,8 @@ export function handleKeyPress(
 						refs.statusText.content = `Error: ${error instanceof Error ? error.message : String(error)}`;
 					}
 				})();
+				return;
 			}
-			event.stopPropagation();
 			return;
 		}
 	}
@@ -316,17 +362,35 @@ export function handleKeyPress(
 		}
 	}
 
+	// Block Meta+I which opens inspector in some terminals
+	if (event.meta && event.name === "i") {
+		event.stopPropagation();
+		return;
+	}
+
 	if (
 		(event.ctrl && event.shift && event.name === "c") ||
 		(event.meta && event.name === "c") ||
 		(event.meta && event.name === "insert") ||
-		(event.meta && event.name === "i") ||
 		(event.option && event.name === "c")
 	) {
-		const textToCopy = refs.input.getSelectedText();
-		if (textToCopy) {
-			refs.renderer.copyToClipboardOSC52(textToCopy);
+		const inputText = refs.input.getSelectedText();
+		const historyText = state.selectedHistoryText;
+
+		if (inputText) {
+			refs.renderer.copyToClipboardOSC52(inputText);
+			refs.statusText.content = "Copied!";
+		} else if (historyText) {
+			refs.renderer.copyToClipboardOSC52(historyText);
+			refs.statusText.content = "Copied!";
+		} else {
+			refs.statusText.content = "Select text to copy";
 		}
+
+		setTimeout(() => {
+			refs.statusText.content = "";
+		}, 2000);
+
 		event.stopPropagation();
 		return;
 	}

@@ -3,6 +3,29 @@ import { theme } from "../config/index.ts";
 import type { HistoryEntry, TuiRefs } from "../types.ts";
 import { createMarkdownMessage } from "./Layout.ts";
 
+export function addDebugMessage(refs: TuiRefs, text: string): void {
+	const wrapper = new BoxRenderable(refs.renderer, {
+		flexDirection: "column",
+		marginBottom: 1,
+		padding: 1,
+		border: true,
+		borderColor: theme.yellow,
+	});
+	const label = new TextRenderable(refs.renderer, {
+		content: "DEBUG",
+		height: 1,
+		fg: theme.yellow,
+	});
+	const msg = new TextRenderable(refs.renderer, {
+		content: text,
+		fg: theme.text,
+	});
+	wrapper.add(label);
+	wrapper.add(msg);
+	refs.scrollBox.add(wrapper);
+	refs.scrollBox.stickyScroll = true;
+}
+
 export function addUserMessage(refs: TuiRefs, text: string): void {
 	const wrapper = new BoxRenderable(refs.renderer, {
 		flexDirection: "column",

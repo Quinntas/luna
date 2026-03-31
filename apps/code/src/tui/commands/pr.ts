@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
 import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
+import { addDebugMessage } from "../components/Messages.ts";
 import { env } from "../config/index.ts";
 import type { TuiRefs, TuiState } from "../types.ts";
 import { generateBranchName, generateCommitMessage } from "../utils/aiGenerator.ts";
+
+const DEBUG_PR = false;
 
 interface GitChange {
 	readonly file: string;
@@ -79,8 +82,8 @@ async function _getWorktreePath(cwd: string): Promise<string | null> {
 	return null;
 }
 
-async function getChanges(cwd: string): Promise<GitChange[]> {
-	const result = await execCommand("git", ["diff", "--stat", "--porcelain"], { cwd });
+async function getStagedChanges(cwd: string): Promise<GitChange[]> {
+	const result = await execCommand("git", ["status", "--porcelain"], { cwd });
 	const lines = result.stdout.split("\n").filter((line) => line.trim());
 	const changes: GitChange[] = [];
 
@@ -116,20 +119,47 @@ export async function runPrCommand(
 	_runtime: LunaRuntime,
 	model: LanguageModel,
 ): Promise<void> {
-	const cwd = state.currentWorktreePath ?? state.currentCwd ?? env.repoRoot;
+	const worktreePath = state.currentWorktreePath;
+	const currentCwd = state.currentCwd;
+	const repoRoot = env.repoRoot;
+	const pwd = process.cwd();
+
+	const cwd = worktreePath || currentCwd || repoRoot || pwd;
+
+	refs.statusText.content = "Staging changes...";
+
+	const stageResult = await execCommand("git", ["add", "-A"], { cwd });
+	if (stageResult.code !== 0) {
+		refs.statusText.content = `Error staging: ${stageResult.stderr}`;
+		return;
+	}
+
 	refs.statusText.content = "Checking for changes...";
 
-	const changes = await getChanges(cwd);
-	const untracked = await getUntrackedFiles(cwd);
+	const changes = await getStagedChanges(cwd);
 
-	if (changes.length === 0 && untracked.length === 0) {
+	if (DEBUG_PR) {
+		const debugMsg = `cwd: "${cwd}"
+  staged changes: ${changes.length}
+  first change: ${changes[0]?.file || "none"}`;
+		addDebugMessage(refs, debugMsg);
+		return;
+	}
+
+	if (changes.length === 0) {
 		refs.statusText.content = "No changes to commit";
 		return;
 	}
 
 	refs.statusText.content = "Generating branch name...";
 
-	const branchName = await generateBranchName(changes, untracked, model);
+	let branchName: string;
+	try {
+		branchName = await generateBranchName(changes, model);
+	} catch (e) {
+		refs.statusText.content = `Error generating branch: ${e instanceof Error ? e.message : String(e)}`;
+		return;
+	}
 
 	refs.statusText.content = `Creating branch: ${branchName}...`;
 
@@ -152,12 +182,12 @@ export async function runPrCommand(
 	}
 
 	refs.statusText.content = "Generating commit message...";
-	const commitMessage = await generateCommitMessage(changes, untracked, model);
 
-	refs.statusText.content = "Staging changes...";
-	const stageResult = await execCommand("git", ["add", "-A"], { cwd });
-	if (stageResult.code !== 0) {
-		refs.statusText.content = `Error staging: ${stageResult.stderr}`;
+	let commitMessage: string;
+	try {
+		commitMessage = await generateCommitMessage(changes, model);
+	} catch (e) {
+		refs.statusText.content = `Error generating commit: ${e instanceof Error ? e.message : String(e)}`;
 		return;
 	}
 

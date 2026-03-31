@@ -30,10 +30,9 @@ export async function generateThreadTitle(message: string, model: LanguageModel)
 
 export async function generateBranchName(
 	changes: (string | GitChange)[],
-	untracked: string[],
 	model: LanguageModel,
 ): Promise<string> {
-	const allFiles = formatChanges(changes, untracked);
+	const allFiles = formatChanges(changes, []);
 	const { text } = await generateText({
 		model,
 		prompt: branchNamePrompt(allFiles),
@@ -47,10 +46,9 @@ export async function generateBranchName(
 
 export async function generateCommitMessage(
 	changes: (string | GitChange)[],
-	untracked: string[],
 	model: LanguageModel,
 ): Promise<string> {
-	const allFiles = formatChanges(changes, untracked);
+	const allFiles = formatChanges(changes, []);
 	const { text } = await generateText({
 		model,
 		prompt: commitMessagePrompt(allFiles),
