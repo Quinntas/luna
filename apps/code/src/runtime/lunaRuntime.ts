@@ -277,6 +277,26 @@ export class LunaRuntime {
 		});
 	}
 
+	async updateThreadWorkspace(
+		threadId: string,
+		updates: { branch?: string; worktreePath?: string; cwd?: string },
+	): Promise<void> {
+		const thread = await this.store.getThread(threadId);
+		if (!thread) {
+			return;
+		}
+		await this.store.putThread({
+			...thread,
+			workspace: {
+				...thread.workspace,
+				branch: updates.branch ?? thread.workspace.branch,
+				worktreePath: updates.worktreePath ?? thread.workspace.worktreePath,
+				cwd: updates.cwd ?? thread.workspace.cwd,
+			},
+			updatedAt: new Date().toISOString(),
+		});
+	}
+
 	listThreads(): Promise<readonly LunaThreadRecord[]> {
 		return this.controller.listThreads();
 	}

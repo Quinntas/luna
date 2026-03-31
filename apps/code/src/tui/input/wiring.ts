@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
 import type { DialogManager } from "../components/dialogs/index.ts";
 import type { TuiRefs, TuiState } from "../types.ts";
@@ -15,8 +16,9 @@ export function wireInput(options: {
 	getThread: () => unknown;
 	sendMessage: (text: string) => Promise<void>;
 	dialogManager: DialogManager;
+	model: LanguageModel;
 }): void {
-	const { state, refs, runtime, getThread, sendMessage, dialogManager } = options;
+	const { state, refs, runtime, getThread, sendMessage, dialogManager, model } = options;
 
 	refs.input.onSubmit = () => {
 		const text = refs.input.plainText.trim();
@@ -52,6 +54,6 @@ export function wireInput(options: {
 	);
 
 	refs.renderer.keyInput.on("keypress", (event) => {
-		handleKeyPress(event, state, refs, runtime, getThread, sendMessage, dialogManager);
+		handleKeyPress(event, state, refs, runtime, getThread, sendMessage, dialogManager, model);
 	});
 }

@@ -10,10 +10,11 @@ export function updateMetaText(state: TuiState, refs: TuiRefs, model: string, mo
 			? Date.now() - state.activeTurnStartedAtMs
 			: state.lastTurnDurationMs;
 	const modeStr = mode ? ` · ${mode}` : "";
+	const branchStr = state.currentBranch ? ` · ${state.currentBranch}` : "";
 	refs.metaText.content =
 		elapsed === null
-			? `${model.toUpperCase()}${modeStr.toUpperCase()}`
-			: `${model.toUpperCase()}${modeStr.toUpperCase()} · ${formatDuration(elapsed)}`;
+			? `${model.toUpperCase()}${modeStr.toUpperCase()}${branchStr}`
+			: `${model.toUpperCase()}${modeStr.toUpperCase()}${branchStr} · ${formatDuration(elapsed)}`;
 }
 
 export function updateTokenText(state: TuiState, refs: TuiRefs): void {

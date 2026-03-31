@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
 import { env } from "../config/index.ts";
 import type { TuiRefs, TuiState } from "../types.ts";
@@ -110,11 +111,12 @@ function sanitizeBranchName(name: string): string {
 }
 
 export async function runPrCommand(
-	_state: TuiState,
+	state: TuiState,
 	refs: TuiRefs,
 	_runtime: LunaRuntime,
+	model: LanguageModel,
 ): Promise<void> {
-	const cwd = env.repoRoot;
+	const cwd = state.currentWorktreePath ?? state.currentCwd ?? env.repoRoot;
 	refs.statusText.content = "Checking for changes...";
 
 	const changes = await getChanges(cwd);
@@ -127,7 +129,7 @@ export async function runPrCommand(
 
 	refs.statusText.content = "Generating branch name...";
 
-	const branchName = await generateBranchName(changes, untracked);
+	const branchName = await generateBranchName(changes, untracked, model);
 
 	refs.statusText.content = `Creating branch: ${branchName}...`;
 
@@ -143,8 +145,14 @@ export async function runPrCommand(
 		return;
 	}
 
+	state.currentBranch = branchName;
+
+	if (state.currentThreadId) {
+		await _runtime.updateThreadWorkspace(state.currentThreadId, { branch: branchName });
+	}
+
 	refs.statusText.content = "Generating commit message...";
-	const commitMessage = await generateCommitMessage(changes, untracked);
+	const commitMessage = await generateCommitMessage(changes, untracked, model);
 
 	refs.statusText.content = "Staging changes...";
 	const stageResult = await execCommand("git", ["add", "-A"], { cwd });

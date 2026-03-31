@@ -1,10 +1,11 @@
 import { parseArgs } from "node:util";
+import { createModel } from "@luna/ai";
 import { createCliRenderer } from "@opentui/core";
-import { generateThreadTitle } from "./commands/threadName.ts";
+import { generateThreadTitleWithModel } from "./commands/threadName.ts";
 import { createDialogManager } from "./components/dialogs/index.ts";
 import { createLayout } from "./components/Layout.ts";
 import { addAgentMessage, addUserMessage, loadHistory } from "./components/Messages.ts";
-import { loadSidebarThreads, updateSidebar } from "./components/Sidebar.ts";
+import { loadProjectStatus, loadSidebarThreads, updateSidebar } from "./components/Sidebar.ts";
 import { env, theme } from "./config/index.ts";
 import { SLASH_COMMANDS } from "./input/commands.ts";
 import { runSlashCommand, updateCommandMenu, wireInput } from "./input/index.ts";
@@ -31,6 +32,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 	const dialogManager = createDialogManager(refs, state);
 
 	const runtime = createRuntime(env.dbPath);
+	const aiModel = createModel(env.AI_PROVIDER, env.AI_MODEL);
 
 	async function saveHistory(): Promise<void> {
 		if (thread) {
@@ -63,20 +65,60 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 				homePath: env.homePath,
 			},
 		});
-		state.threadTitle = "New thread";
-		const modeLabel = state.worktreeMode ? "worktree" : "repo";
-		updateMetaText(state, refs, env.model, modeLabel);
+
+		const threadRecord = await runtime.getThread(thread.id);
+		if (!threadRecord) return;
+
+		state.threadTitle = threadRecord.title;
+		state.currentThreadId = threadRecord.id;
+		state.currentBranch = threadRecord.workspace.branch;
+		state.currentWorktreePath = threadRecord.workspace.worktreePath;
+		state.currentCwd = threadRecord.workspace.cwd;
+		state.worktreeMode = threadRecord.workspace.mode === "worktree";
+
 		if (state.sidebarVisible) {
-			state.sidebarProjects = await loadSidebarThreads(runtime);
+			const repoName = threadRecord.repoRoot.split("/").at(-1) ?? threadRecord.repoRoot;
+			const existingProject = state.sidebarProjects.find((p) => p.name === repoName);
+			const newThread = {
+				id: threadRecord.id,
+				title: threadRecord.title,
+				branch: threadRecord.workspace.branch,
+				mode: threadRecord.workspace.mode,
+				repoRoot: threadRecord.repoRoot,
+				createdAt: threadRecord.createdAt,
+				updatedAt: threadRecord.updatedAt,
+			};
+
+			if (existingProject) {
+				existingProject.threads.unshift(newThread);
+				existingProject.expanded = true;
+			} else {
+				state.sidebarProjects.unshift({
+					name: repoName,
+					threads: [newThread],
+					expanded: true,
+					currentBranch: threadRecord.workspace.branch ?? "main",
+				});
+			}
+			state.selectedProjectIdx = 0;
+			state.selectedThreadIdx = 0;
+			state.sidebarMode = "threads";
+			const currentProject = state.sidebarProjects[state.selectedProjectIdx];
+			if (currentProject) {
+				await loadProjectStatus(currentProject);
+			}
 			updateSidebar(state, refs);
 		}
+
+		const modeLabel = state.worktreeMode ? "worktree" : "repo";
+		updateMetaText(state, refs, env.model, modeLabel);
 	}
 
 	async function sendMessage(text: string): Promise<void> {
 		if (!state.inputEnabled) return;
 		const slashCommand = SLASH_COMMANDS.find((command) => command.name === text);
 		if (slashCommand) {
-			runSlashCommand(slashCommand, state, refs, dialogManager, runtime, (model, mode) => {
+			runSlashCommand(slashCommand, state, refs, dialogManager, runtime, aiModel, (model, mode) => {
 				updateMetaText(state, refs, model, mode);
 			});
 			return;
@@ -94,7 +136,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		if (state.history.length === 1) {
 			state.threadTitle = "New thread";
 			const currentThreadId = thread.id;
-			generateThreadTitle(text).then(async (title) => {
+			generateThreadTitleWithModel(text, aiModel).then(async (title) => {
 				await runtime.updateThreadTitle(currentThreadId, title);
 				state.threadTitle = title;
 				if (state.sidebarVisible) {
@@ -125,6 +167,7 @@ export async function runTui(opts: { resume: boolean; threadId?: string }): Prom
 		getThread: () => thread,
 		sendMessage,
 		dialogManager,
+		model: aiModel,
 	});
 
 	if (opts.resume) {

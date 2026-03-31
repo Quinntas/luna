@@ -22,9 +22,11 @@ export class WorktreeManager implements WorktreeProvisioner {
 	async ensureBinding(input: LunaStartThreadInput): Promise<LunaWorktreeBinding> {
 		const mode = input.worktree?.mode ?? "reuse-or-create";
 		if (mode === "repo-root") {
+			const status = await this.client.status({ cwd: input.repoRoot });
+			const currentBranch = status.branch ?? null;
 			return {
 				repoRoot: input.repoRoot,
-				branch: null,
+				branch: currentBranch,
 				worktreePath: null,
 				cwd: resolveEffectiveCwd({ repoRoot: input.repoRoot }),
 				reused: false,

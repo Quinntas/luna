@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import type { KeyEvent } from "@opentui/core";
+import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
 import { runPrCommand } from "../commands/pr.ts";
 import type { DialogManager } from "../components/dialogs/index.ts";
@@ -13,6 +15,35 @@ import { updateMetaText } from "../runtime/events.ts";
 import type { SlashCommand, TuiRefs, TuiState } from "../types.ts";
 import { getSlashQuery } from "../utils/index.ts";
 import { SLASH_COMMANDS } from "./commands.ts";
+
+async function execGit(
+	cmd: string,
+	args: string[],
+	cwd: string,
+): Promise<{ stdout: string; stderr: string; code: number | null }> {
+	return new Promise((resolve) => {
+		const child = spawn(cmd, args, {
+			cwd,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		let stdout = "";
+		let stderr = "";
+		child.stdout.on("data", (data) => {
+			stdout += data.toString();
+		});
+		child.stderr.on("data", (data) => {
+			stderr += data.toString();
+		});
+		child.on("close", (code) => {
+			resolve({ stdout, stderr, code });
+		});
+	});
+}
+
+async function getCurrentBranch(cwd: string): Promise<string | null> {
+	const result = await execGit("git", ["branch", "--show-current"], cwd);
+	return result.stdout.trim() || null;
+}
 
 export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
 	const query = getSlashQuery(refs.input.plainText);
@@ -79,6 +110,7 @@ export function runSlashCommand(
 	refs: TuiRefs,
 	dialogManager: DialogManager,
 	runtime: LunaRuntime,
+	model: LanguageModel,
 	updateMeta: (model: string, mode: string) => void,
 ): boolean {
 	if (command.action === "hotkeys") {
@@ -105,7 +137,7 @@ export function runSlashCommand(
 		return true;
 	}
 	if (command.action === "pr") {
-		void runPrCommand(state, refs, runtime);
+		void runPrCommand(state, refs, runtime, model);
 		return true;
 	}
 	return false;
@@ -119,6 +151,7 @@ export function handleKeyPress(
 	getThread: () => unknown,
 	sendMessage: (text: string) => Promise<void>,
 	dialogManager: DialogManager,
+	model: LanguageModel,
 ): void {
 	if (event.ctrl && event.name === "c") {
 		void (async () => {
@@ -184,6 +217,25 @@ export function handleKeyPress(
 							loadHistory(refs, state.history);
 						}
 						state.worktreeMode = threadRecord?.workspace.mode === "worktree";
+						state.currentThreadId = threadRecord?.id ?? null;
+						state.currentBranch = threadRecord?.workspace.branch ?? null;
+						state.currentWorktreePath = threadRecord?.workspace.worktreePath ?? null;
+						state.currentCwd = threadRecord?.workspace.cwd ?? "";
+
+						const targetBranch = threadRecord?.workspace.branch;
+						const targetCwd = threadRecord?.workspace.cwd ?? env.repoRoot;
+
+						if (targetBranch) {
+							const currentBranch = await getCurrentBranch(targetCwd);
+							if (currentBranch !== targetBranch) {
+								refs.statusText.content = `Switching to branch: ${targetBranch}...`;
+								const checkoutResult = await execGit("git", ["checkout", targetBranch], targetCwd);
+								if (checkoutResult.code !== 0) {
+									refs.statusText.content = `Warning: Failed to switch branch: ${checkoutResult.stderr}`;
+								}
+							}
+						}
+
 						const modeLabel = state.worktreeMode ? "worktree" : "repo";
 						updateMetaText(state, refs, env.model, modeLabel);
 

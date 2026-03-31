@@ -65,6 +65,10 @@ export function createInitialState(): TuiState {
 		selectedProjectIdx: 0,
 		selectedThreadIdx: 0,
 		sidebarMode: "projects", // "projects" | "threads"
+		currentThreadId: null,
+		currentBranch: null,
+		currentWorktreePath: null,
+		currentCwd: "",
 	};
 }
 
@@ -108,4 +112,8 @@ export interface TuiState {
 	selectedProjectIdx: number;
 	selectedThreadIdx: number;
 	sidebarMode: "projects" | "threads";
+	currentThreadId: string | null;
+	currentBranch: string | null;
+	currentWorktreePath: string | null;
+	currentCwd: string;
 }
