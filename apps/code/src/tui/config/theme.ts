@@ -15,3 +15,8 @@ export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", 
 export const SCROLL_STEP = 3;
 export const REASONING_EFFORTS = ["low", "medium", "high"] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+export const SIDEBAR_CONFIG = {
+	maxThreadsPerProject: 10,
+	widthChars: 40,
+} as const;

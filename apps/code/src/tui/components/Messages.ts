@@ -1,6 +1,6 @@
 import { BoxRenderable, TextRenderable } from "@opentui/core";
 import { theme } from "../config/index.ts";
-import type { TuiRefs } from "../types.ts";
+import type { HistoryEntry, TuiRefs } from "../types.ts";
 import { createMarkdownMessage } from "./Layout.ts";
 
 export function addUserMessage(refs: TuiRefs, text: string): void {
@@ -22,7 +22,7 @@ export function addUserMessage(refs: TuiRefs, text: string): void {
 	refs.scrollBox.add(wrapper);
 }
 
-export function addAgentMessage(refs: TuiRefs) {
+export function addAgentMessage(refs: TuiRefs, content: string = "") {
 	const wrapper = new BoxRenderable(refs.renderer, {
 		flexDirection: "column",
 		marginBottom: 1,
@@ -33,6 +33,7 @@ export function addAgentMessage(refs: TuiRefs) {
 		fg: theme.mauve,
 	});
 	const md = createMarkdownMessage(refs.renderer);
+	md.content = content;
 	wrapper.add(label);
 	wrapper.add(md);
 	refs.scrollBox.add(wrapper);
@@ -44,4 +45,16 @@ export function clearChatHistory(refs: TuiRefs): void {
 		refs.scrollBox.remove(child.id);
 	}
 	refs.renderer.clearSelection();
+}
+
+export function loadHistory(refs: TuiRefs, history: readonly HistoryEntry[]): void {
+	clearChatHistory(refs);
+	const reversed = [...history].reverse();
+	for (const entry of reversed) {
+		if (entry.role === "user") {
+			addUserMessage(refs, entry.content);
+		} else {
+			addAgentMessage(refs, entry.content);
+		}
+	}
 }

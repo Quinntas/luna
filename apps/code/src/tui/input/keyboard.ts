@@ -2,8 +2,14 @@ import type { KeyEvent } from "@opentui/core";
 import type { LunaRuntime } from "../../index.ts";
 import { runPrCommand } from "../commands/pr.ts";
 import type { DialogManager } from "../components/dialogs/index.ts";
-import { clearChatHistory } from "../components/Messages.ts";
+import { clearChatHistory, loadHistory } from "../components/Messages.ts";
+import {
+	getSelectedThreadId,
+	handleSidebarNavigation,
+	toggleSidebar,
+} from "../components/Sidebar.ts";
 import { env, SCROLL_STEP } from "../config/index.ts";
+import { updateMetaText } from "../runtime/events.ts";
 import type { SlashCommand, TuiRefs, TuiState } from "../types.ts";
 import { getSlashQuery } from "../utils/index.ts";
 import { SLASH_COMMANDS } from "./commands.ts";
@@ -140,6 +146,57 @@ export function handleKeyPress(
 		dialogManager.setActive(state.activeDialog === "hotkeys" ? null : "hotkeys");
 		event.stopPropagation();
 		return;
+	}
+
+	// Ctrl+b: toggle sidebar
+	if (event.ctrl && event.name === "b") {
+		void toggleSidebar(state, refs, runtime);
+		event.stopPropagation();
+		return;
+	}
+
+	// Sidebar navigation
+	if (state.sidebarVisible) {
+		if (handleSidebarNavigation(state, refs, event.name, event.shift)) {
+			event.stopPropagation();
+			return;
+		}
+		if (event.name === "escape") {
+			state.sidebarVisible = false;
+			refs.sidebar.visible = false;
+			refs.input.focus();
+			event.stopPropagation();
+			return;
+		}
+		if (event.name === "return") {
+			const threadId = getSelectedThreadId(state);
+			if (threadId) {
+				void (async () => {
+					try {
+						refs.statusText.content = "Switching to thread...";
+						state.sidebarVisible = false;
+						refs.sidebar.visible = false;
+						refs.sidebarContainer.width = 0;
+
+						const threadRecord = await runtime.getThread(threadId);
+						if (threadRecord?.history) {
+							state.history = [...threadRecord.history];
+							loadHistory(refs, state.history);
+						}
+						state.worktreeMode = threadRecord?.workspace.mode === "worktree";
+						const modeLabel = state.worktreeMode ? "worktree" : "repo";
+						updateMetaText(state, refs, env.model, modeLabel);
+
+						refs.statusText.content = "";
+						refs.input.focus();
+					} catch (error) {
+						refs.statusText.content = `Error: ${error instanceof Error ? error.message : String(error)}`;
+					}
+				})();
+			}
+			event.stopPropagation();
+			return;
+		}
 	}
 
 	// Let SelectRenderable handle up/down when visible

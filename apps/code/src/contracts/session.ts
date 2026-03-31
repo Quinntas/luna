@@ -20,3 +20,9 @@ export interface LunaSendMessageInput {
 	readonly interactionMode?: "default" | "plan";
 	readonly reasoningEffort?: string;
 }
+
+export interface LunaGenerateInput {
+	readonly prompt: string;
+	readonly threadId?: LunaThreadId;
+	readonly repoRoot?: string;
+}

@@ -1,7 +1,11 @@
 import { CodexSessionAdapter } from "../codex/codexSessionAdapter";
 import type { LunaRuntimeEvent } from "../contracts/events";
 import type { LunaLogger, ThreadStore } from "../contracts/ports";
-import type { LunaSendMessageInput, LunaStartThreadInput } from "../contracts/session";
+import type {
+	LunaGenerateInput,
+	LunaSendMessageInput,
+	LunaStartThreadInput,
+} from "../contracts/session";
 import type { LunaThreadRecord } from "../contracts/thread";
 import { MemoryThreadStore } from "../storage/memoryThreadStore";
 import { checkpointRefForThreadTurn } from "../worktree/checkpointRefs";
@@ -261,6 +265,18 @@ export class LunaRuntime {
 		});
 	}
 
+	async updateThreadTitle(threadId: string, title: string): Promise<void> {
+		const thread = await this.store.getThread(threadId);
+		if (!thread) {
+			return;
+		}
+		await this.store.putThread({
+			...thread,
+			title,
+			updatedAt: new Date().toISOString(),
+		});
+	}
+
 	listThreads(): Promise<readonly LunaThreadRecord[]> {
 		return this.controller.listThreads();
 	}
@@ -430,5 +446,52 @@ export class LunaRuntime {
 			...new Set([...this.activeTurnCounts.keys(), ...this.checkpointWork.keys()]),
 		];
 		await Promise.all(threadIds.map(async (id) => this.awaitThreadIdle(id)));
+	}
+
+	async generateText(input: LunaGenerateInput): Promise<string> {
+		const threadId = input.threadId ?? `gen-${Date.now()}`;
+		const repoRoot = input.repoRoot ?? process.cwd();
+
+		let thread = await this.store.getThread(threadId);
+		if (!thread) {
+			thread = await this.startThread({
+				threadId,
+				title: "Generation",
+				repoRoot,
+				worktree: { mode: "repo-root" },
+				codex: { model: "gpt-5.4", runtimeMode: "full-access" },
+			});
+		}
+
+		return new Promise((resolve) => {
+			let content = "";
+
+			const unsubscribe = this.on((event) => {
+				if (event.threadId === threadId && event.type === "content.delta") {
+					content += event.payload.delta;
+				}
+				if (event.threadId === threadId && event.type === "turn.completed") {
+					unsubscribe();
+					resolve(content.trim());
+				}
+				if (event.threadId === threadId && event.type === "turn.aborted") {
+					unsubscribe();
+					resolve(content.trim());
+				}
+				if (event.threadId === threadId && event.type === "session.error") {
+					unsubscribe();
+					resolve(content.trim());
+				}
+			});
+
+			this.sendMessage({
+				threadId,
+				text: input.prompt,
+				interactionMode: "default",
+			}).catch(() => {
+				unsubscribe();
+				resolve(content.trim());
+			});
+		});
 	}
 }
