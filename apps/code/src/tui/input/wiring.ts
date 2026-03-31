@@ -1,5 +1,6 @@
 import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
+import { updateSidebar } from "../components/Sidebar.ts";
 import type { DialogManager } from "../components/dialogs/index.ts";
 import type { TuiRefs, TuiState } from "../types.ts";
 import {
@@ -46,12 +47,27 @@ export function wireInput(options: {
 		refs.inputBox.height = newHeight;
 	};
 
-	refs.renderer.keyInput.on(
-		"paste",
-		(event: { bytes: Uint8Array; stopPropagation: () => void }) => {
-			handlePaste(event, state, refs);
-		},
-	);
+	// Capture text selection from chat history
+	refs.renderer.on("selection", (selection: { getSelectedText?: () => string } | null) => {
+		const text = selection?.getSelectedText?.() ?? null;
+		state.selectedHistoryText = text || null;
+	});
+
+	// Sidebar mouse click: map click y-position to thread index and switch
+	refs.sidebar.onMouseDown = (e) => {
+		e.preventDefault();
+		if (!state.sidebarVisible || state.sidebarThreads.length === 0) return;
+		// Each item takes 2 rows (name + description with showDescription: true)
+		const clickedIdx = Math.floor(e.y / 2);
+		const clampedIdx = Math.max(0, Math.min(state.sidebarThreads.length - 1, clickedIdx));
+		state.selectedThreadIdx = clampedIdx;
+		refs.sidebar.setSelectedIndex(clampedIdx);
+		updateSidebar(state, refs);
+	};
+
+	refs.renderer.keyInput.on("paste", (event: { bytes: Uint8Array; stopPropagation: () => void }) => {
+		handlePaste(event, state, refs);
+	});
 
 	refs.renderer.keyInput.on("keypress", (event) => {
 		handleKeyPress(event, state, refs, runtime, getThread, sendMessage, dialogManager, model);

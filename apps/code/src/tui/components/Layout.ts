@@ -225,8 +225,7 @@ export function createLayout(renderer: CliRenderer): TuiRefs {
 		e.preventDefault();
 		input.focus();
 	};
-	scrollBox.onMouseDown = (e) => {
-		e.preventDefault();
+	scrollBox.onMouseDown = () => {
 		input.focus();
 	};
 

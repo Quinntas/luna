@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import type { KeyEvent } from "@opentui/core";
 import type { LanguageModel } from "ai";
 import type { LunaRuntime } from "../../index.ts";
@@ -16,72 +15,17 @@ import type { SlashCommand, TuiRefs, TuiState } from "../types.ts";
 import { getSlashQuery } from "../utils/index.ts";
 import { SLASH_COMMANDS } from "./commands.ts";
 
-async function execGit(
-	cmd: string,
-	args: string[],
-	cwd: string,
-): Promise<{ stdout: string; stderr: string; code: number | null }> {
-	return new Promise((resolve) => {
-		const child = spawn(cmd, args, {
-			cwd,
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		let stdout = "";
-		let stderr = "";
-		child.stdout.on("data", (data) => {
-			stdout += data.toString();
-		});
-		child.stderr.on("data", (data) => {
-			stderr += data.toString();
-		});
-		child.on("error", (err) => {
-			resolve({ stdout, stderr: err.message, code: -1 });
-		});
-		child.on("close", (code) => {
-			resolve({ stdout, stderr, code });
-		});
-	});
-}
-
-async function getCurrentBranch(cwd: string): Promise<string | null> {
-	const result = await execGit("git", ["branch", "--show-current"], cwd);
-	return result.stdout.trim() || null;
-}
-
-async function runNewThreadCommand(
-	state: TuiState,
-	refs: TuiRefs,
-	runtime: LunaRuntime,
-	repoRoot: string,
-): Promise<void> {
-	refs.statusText.content = "Creating new thread... (type your first message to name the worktree)";
-
-	const mainBranch = await getCurrentBranch(repoRoot);
-	if (!mainBranch) {
-		refs.statusText.content = "Error: Not on a branch in main repo";
-		return;
-	}
-
-	const threadId = `thread-${Date.now()}`;
-	const tempWorktreeName = `worktree-${Date.now()}`;
-
-	state.currentThreadId = threadId;
-	state.currentBranch = mainBranch;
+function runNewThreadCommand(state: TuiState, refs: TuiRefs): void {
+	state.currentThreadId = null;
+	state.currentBranch = null;
 	state.currentWorktreePath = null;
-	state.currentCwd = repoRoot;
-	state.worktreeMode = true;
+	state.currentCwd = env.repoRoot;
 	state.threadTitle = "New thread";
 	state.history = [];
 	state.historyIndex = -1;
-	state.pendingWorktree = {
-		repoRoot,
-		mainBranch,
-		threadId,
-	};
-
 	clearChatHistory(refs);
 	refs.input.focus();
-	refs.statusText.content = "Type your first message to create worktree...";
+	refs.statusText.content = "";
 }
 
 export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
@@ -108,27 +52,23 @@ export function updateCommandMenu(state: TuiState, refs: TuiRefs): void {
 		command.name.slice(1).startsWith(normalizedQuery),
 	);
 
-	// If no matches, hide menu
 	if (state.commandMatches.length === 0) {
 		refs.commandMenu.visible = false;
 		refs.metaText.visible = true;
 		return;
 	}
 
-	// Reset selection when matches change
 	state.commandSelectionIdx = 0;
 
 	refs.commandMenu.visible = true;
 	refs.metaText.visible = false;
 
-	// Update SelectRenderable options
 	refs.commandMenu.options = state.commandMatches.map((cmd) => ({
 		name: cmd.name,
 		description: cmd.description,
 		value: cmd,
 	}));
 
-	// Set selection to 0
 	refs.commandMenu.setSelectedIndex(0);
 }
 
@@ -176,7 +116,7 @@ export function runSlashCommand(
 		return true;
 	}
 	if (command.action === "new") {
-		void runNewThreadCommand(state, refs, runtime, env.repoRoot);
+		runNewThreadCommand(state, refs);
 		return true;
 	}
 	if (command.action === "pr") {
@@ -233,13 +173,14 @@ export function handleKeyPress(
 
 	// Sidebar navigation
 	if (state.sidebarVisible) {
-		if (handleSidebarNavigation(state, refs, event.name, event.shift)) {
+		if (handleSidebarNavigation(state, refs, event.name)) {
 			event.stopPropagation();
 			return;
 		}
 		if (event.name === "escape") {
 			state.sidebarVisible = false;
 			refs.sidebar.visible = false;
+			refs.sidebarContainer.width = 0;
 			refs.input.focus();
 			event.stopPropagation();
 			return;
@@ -268,20 +209,6 @@ export function handleKeyPress(
 						state.currentWorktreePath = threadRecord?.workspace.worktreePath ?? null;
 						state.currentCwd = threadRecord?.workspace.cwd ?? "";
 
-						const targetBranch = threadRecord?.workspace.branch;
-						const targetCwd = threadRecord?.workspace.cwd ?? env.repoRoot;
-
-						if (targetBranch) {
-							const currentBranch = await getCurrentBranch(targetCwd);
-							if (currentBranch !== targetBranch) {
-								refs.statusText.content = `Switching to branch: ${targetBranch}...`;
-								const checkoutResult = await execGit("git", ["checkout", targetBranch], targetCwd);
-								if (checkoutResult.code !== 0) {
-									refs.statusText.content = `Warning: Failed to switch branch: ${checkoutResult.stderr}`;
-								}
-							}
-						}
-
 						const modeLabel = state.worktreeMode ? "worktree" : "repo";
 						updateMetaText(state, refs, env.model, modeLabel);
 
@@ -291,15 +218,13 @@ export function handleKeyPress(
 						refs.statusText.content = `Error: ${error instanceof Error ? error.message : String(error)}`;
 					}
 				})();
-				return;
 			}
 			return;
 		}
 	}
 
-	// Let SelectRenderable handle up/down when visible
+	// Command menu navigation
 	if (refs.commandMenu.visible && state.activeDialog === null) {
-		// If user presses Tab, enter, or special keys, handle selection
 		if (event.name === "tab" || event.name === "return") {
 			const selected = applySelectedCommand(state, refs);
 			if (selected) {
@@ -310,8 +235,6 @@ export function handleKeyPress(
 			event.stopPropagation();
 			return;
 		}
-
-		// Handle arrow keys for navigation
 		if (event.name === "up" || event.name === "k") {
 			refs.commandMenu.moveUp();
 			event.stopPropagation();
@@ -322,8 +245,6 @@ export function handleKeyPress(
 			event.stopPropagation();
 			return;
 		}
-
-		// Let the select handle arrow keys unless it's at boundary and we want to exit
 		if (event.name === "escape") {
 			refs.input.clear();
 			updateCommandMenu(state, refs);

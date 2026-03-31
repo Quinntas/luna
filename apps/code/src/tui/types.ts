@@ -61,15 +61,12 @@ export function createInitialState(): TuiState {
 		historyIndex: -1,
 		threadTitle: "New thread",
 		sidebarVisible: false,
-		sidebarProjects: [],
-		selectedProjectIdx: 0,
+		sidebarThreads: [],
 		selectedThreadIdx: 0,
-		sidebarMode: "projects", // "projects" | "threads"
 		currentThreadId: null,
 		currentBranch: null,
 		currentWorktreePath: null,
 		currentCwd: "",
-		pendingWorktree: null,
 		selectedHistoryText: null,
 	};
 }
@@ -83,13 +80,6 @@ export interface SidebarThread {
 	createdAt: string;
 	updatedAt: string;
 	status?: "clean" | "dirty";
-}
-
-export interface SidebarProject {
-	name: string;
-	threads: SidebarThread[];
-	expanded: boolean;
-	currentBranch: string;
 }
 
 export interface TuiState {
@@ -110,14 +100,11 @@ export interface TuiState {
 	historyIndex: number;
 	threadTitle: string;
 	sidebarVisible: boolean;
-	sidebarProjects: SidebarProject[];
-	selectedProjectIdx: number;
+	sidebarThreads: SidebarThread[];
 	selectedThreadIdx: number;
-	sidebarMode: "projects" | "threads";
 	currentThreadId: string | null;
 	currentBranch: string | null;
 	currentWorktreePath: string | null;
 	currentCwd: string;
-	pendingWorktree: { repoRoot: string; mainBranch: string; threadId: string } | null;
 	selectedHistoryText: string | null;
 }
