@@ -316,4 +316,4 @@ luna/
 - Internal workspace dependencies use `workspace:*`.
 - Imports use explicit `.ts` extensions.
 - Formatting and linting are handled by Biome.
-- The repo is set up as ESM only (`"type": "module"`).
+- The repo is set up as ESM only (`"type": "module"`).a
